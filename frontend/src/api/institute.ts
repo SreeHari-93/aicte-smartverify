@@ -513,6 +513,16 @@ export const instituteApi = {
     return res.data;
   },
 
+  getComplaintDetail: async (complaintId: number): Promise<ComplaintItem> => {
+    const res = await apiClient.get<ComplaintItem>(`/api/institute/complaints/${complaintId}`);
+    return res.data;
+  },
+
+  replyComplaint: async (complaintId: number, notes: string): Promise<ComplaintItem> => {
+    const res = await apiClient.post<ComplaintItem>(`/api/institute/complaints/${complaintId}/reply`, { notes });
+    return res.data;
+  },
+
   generateReport: async (payload: {
     report_type: string;
     format: string;

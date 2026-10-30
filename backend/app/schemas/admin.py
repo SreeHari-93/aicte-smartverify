@@ -350,3 +350,138 @@ class ImportBundle(BaseModel):
     rules: Optional[List[Dict[str, Any]]] = None
     overwrite_existing: bool = True
 
+
+# -------------------------------------------------------------
+# Stage 8-ii: Verification Queue, Anomalies, Complaints Schemas
+# -------------------------------------------------------------
+
+class VerificationQueueItemDetailed(BaseModel):
+    id: int
+    document_id: int
+    document_filename: str
+    document_type_code: Optional[str] = None
+    document_type_name: Optional[str] = None
+    institute_id: int
+    institute_name: str
+    status: str
+    original_status: Optional[str] = None
+    source_name: Optional[str] = None
+    source_ref: Optional[str] = None
+    checked_at: Optional[datetime] = None
+    created_at: datetime
+    age_days: int = 0
+    assigned_officer_id: Optional[int] = None
+    assigned_officer_name: Optional[str] = None
+    file_size: int = 0
+    mime_type: Optional[str] = None
+    manual_decision: Optional[str] = None
+    manual_reason: Optional[str] = None
+    manual_reviewed_by: Optional[int] = None
+    manual_reviewed_at: Optional[datetime] = None
+    message: Optional[str] = None
+    matched_fields: List[Dict[str, Any]] = Field(default_factory=list)
+    mismatched_fields: List[Dict[str, Any]] = Field(default_factory=list)
+    extracted_fields: Dict[str, Any] = Field(default_factory=dict)
+    official_values: Dict[str, Any] = Field(default_factory=dict)
+    timeline: List[Dict[str, Any]] = Field(default_factory=list)
+
+
+class DocumentReviewDecisionRequest(BaseModel):
+    decision: str  # APPROVED | REJECTED | REUPLOAD_REQUESTED
+    reason: str = Field(..., min_length=3, description="Mandatory reason for audit trail")
+
+
+class DocumentAssignRequest(BaseModel):
+    officer_id: Optional[int] = None
+
+
+class AdminAnomalyFlagOut(BaseModel):
+    id: int
+    run_id: int
+    document_id: int
+    document_filename: Optional[str] = None
+    document_type_code: Optional[str] = None
+    institute_id: Optional[int] = None
+    institute_name: Optional[str] = None
+    detector: str
+    code: str
+    group_key: Optional[str] = None
+    severity: str
+    reason: str
+    confidence: float
+    recommended_action: str
+    review_status: str
+    reviewed_by: Optional[int] = None
+    reviewed_by_name: Optional[str] = None
+    review_note: Optional[str] = None
+    reviewed_at: Optional[datetime] = None
+    overlay_image_path: Optional[str] = None
+    has_overlay: bool = False
+    evidence_json: List[Dict[str, Any]] = Field(default_factory=list)
+    created_at: datetime
+
+
+class AdminAnomalyDecisionRequest(BaseModel):
+    decision: str = Field(..., description="'Verified – no concern', 'Needs institute clarification', or 'Escalate'")
+    note: str = Field(..., min_length=3, description="Mandatory review note")
+
+
+class ComplaintEventOut(BaseModel):
+    id: int
+    complaint_id: int
+    action: str
+    notes: str
+    created_by: str
+    is_internal: bool = False
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class AdminComplaintOut(BaseModel):
+    id: int
+    ticket_id: str
+    institute_id: int
+    institute_name: Optional[str] = None
+    application_id: Optional[int] = None
+    application_ref: Optional[str] = None
+    attachment_document_id: Optional[int] = None
+    attachment_filename: Optional[str] = None
+    category: str
+    subject: str
+    description: str
+    status: str
+    priority: str = "MEDIUM"
+    assigned_to: Optional[int] = None
+    assigned_officer_name: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+    events: List[ComplaintEventOut] = Field(default_factory=list)
+
+    class Config:
+        from_attributes = True
+
+
+class AdminComplaintReplyRequest(BaseModel):
+    notes: str = Field(..., min_length=2)
+    is_internal: bool = False
+    new_status: Optional[str] = None
+    assigned_to: Optional[int] = None
+
+
+class AdminComplaintAssignRequest(BaseModel):
+    assigned_to: Optional[int] = None
+
+
+class AdminDashboardStats(BaseModel):
+    pending_verifications_count: int
+    open_anomalies_count: int
+    open_complaints_count: int
+    total_rules_count: int
+    active_rules_count: int
+    draft_rules_count: int
+    document_types_count: int
+    checklists_count: int
+
+

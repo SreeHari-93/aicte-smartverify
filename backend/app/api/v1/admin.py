@@ -1,6 +1,7 @@
 from typing import List, Optional, Dict, Any, Union
 from datetime import datetime, timezone
 import os
+import re
 from fastapi import APIRouter, Depends, HTTPException, Query, status, Response
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
@@ -16,7 +17,14 @@ from backend.app.models.application_category import ApplicationCategory
 from backend.app.models.checklist_item import ChecklistItem
 from backend.app.models.audit_log import AuditLog
 from backend.app.models.validation_run import ValidationRun, ValidationFinding, FindingNote
+from backend.app.models.document import Document
+from backend.app.models.complaint import Complaint, ComplaintEvent
+from backend.app.models.notification import Notification
+from backend.app.models.email_outbox import EmailOutbox
+from backend.app.models.verification import VerificationResult, VerificationStatus
+from backend.app.models.anomaly import AnomalyFlag, AnomalyReviewStatus
 from backend.app.services.audit_service import AuditService
+from backend.app.services.email_service import EmailService
 from backend.app.services.rule_engine.schemas import RuleDefinition
 from backend.app.services.rule_engine.engine import RuleEngine
 from backend.app.services.document_pipeline.readiness import ReadinessService
@@ -81,6 +89,16 @@ from backend.app.schemas.admin import (
     PublishPreviewOut,
     RuleDiffOut,
     AdminApplicationOut,
+    VerificationQueueItemDetailed,
+    DocumentReviewDecisionRequest,
+    DocumentAssignRequest,
+    AdminAnomalyFlagOut,
+    AdminAnomalyDecisionRequest,
+    ComplaintEventOut,
+    AdminComplaintOut,
+    AdminComplaintReplyRequest,
+    AdminComplaintAssignRequest,
+    AdminDashboardStats,
 )
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -1941,6 +1959,851 @@ def list_audit_logs(
     if user_id:
         query = query.filter(AuditLog.user_id == user_id)
     return query.order_by(AuditLog.id.desc()).offset(offset).limit(limit).all()
+
+
+# ==============================================================================
+# STAGE 8-ii: VERIFICATION QUEUE & REVIEW WORKSPACES
+# ==============================================================================
+
+def sanitize_anomaly_text(text: Optional[str]) -> str:
+    """Enforces non-inflammatory terminology: replaces forbidden terms with 'needs verification' / 'potential anomaly'."""
+    if not text:
+        return ""
+    cleaned = text
+    cleaned = re.sub(r'\bforgery\b', 'potential anomaly', cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r'\bfraud\b', 'potential anomaly', cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r'\bmisconduct\b', 'discrepancy needing verification', cleaned, flags=re.IGNORECASE)
+    return cleaned
+
+
+@router.get("/verification-queue", response_model=List[VerificationQueueItemDetailed])
+def get_admin_verification_queue(
+    status: Optional[str] = Query(None, description="Filter by status: MANUAL_REVIEW_REQUIRED, SOURCE_UNAVAILABLE, MISMATCH_DETECTED, VERIFICATION_PENDING, VERIFIED, ALL"),
+    institute_id: Optional[int] = Query(None, description="Filter by institute ID"),
+    document_type: Optional[str] = Query(None, description="Filter by document type code"),
+    search: Optional[str] = Query(None, description="Search by document filename or institute name"),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    current_user: User = Depends(require_admin_or_reviewer),
+    db: Session = Depends(get_db),
+):
+    """
+    Returns documents requiring statutory review or external verification attention.
+    Columns: institute, document type, file, status, age, assigned officer.
+    """
+    query = db.query(Document).join(Institute, Document.institute_id == Institute.id)
+
+    if institute_id:
+        query = query.filter(Document.institute_id == institute_id)
+    if document_type:
+        query = query.filter(Document.document_type_code == document_type)
+    if search:
+        s = f"%{search.strip()}%"
+        query = query.filter(
+            (Document.original_filename.ilike(s)) |
+            (Institute.name.ilike(s)) |
+            (Institute.aicte_institute_id.ilike(s))
+        )
+
+    all_docs = query.order_by(Document.id.desc()).all()
+
+    target_statuses = [
+        VerificationStatus.MANUAL_REVIEW_REQUIRED,
+        VerificationStatus.SOURCE_UNAVAILABLE,
+        VerificationStatus.MISMATCH_DETECTED,
+        VerificationStatus.VERIFICATION_PENDING,
+    ]
+    if status and status.upper() not in ["ALL", ""]:
+        target_statuses = [status.upper()]
+
+    results: List[VerificationQueueItemDetailed] = []
+    now = datetime.now(timezone.utc)
+
+    for doc in all_docs:
+        latest_ver = doc.latest_verification
+        cur_status = latest_ver.status if latest_ver else VerificationStatus.VERIFICATION_PENDING
+
+        if status and status.upper() != "ALL":
+            if cur_status != status.upper():
+                continue
+        elif status is None or status.upper() == "":
+            if cur_status not in target_statuses:
+                continue
+
+        inst = doc.institute
+        assigned_name = doc.assigned_officer.email if doc.assigned_officer else None
+        details = (latest_ver.details_json if latest_ver else {}) or {}
+
+        # Age computation
+        created_at_dt = doc.created_at
+        if created_at_dt.tzinfo is None:
+            created_at_dt = created_at_dt.replace(tzinfo=timezone.utc)
+        age_days = max(0, (now - created_at_dt).days)
+
+        # Build timeline
+        timeline: List[Dict[str, Any]] = [
+            {
+                "event": "DOCUMENT_UPLOADED",
+                "timestamp": doc.created_at.isoformat() if doc.created_at else None,
+                "actor": inst.name if inst else "Institute",
+                "notes": f"File '{doc.original_filename}' uploaded ({doc.file_size} bytes)",
+            }
+        ]
+        if doc.processed_at:
+            timeline.append({
+                "event": "OCR_PROCESSED",
+                "timestamp": doc.processed_at.isoformat(),
+                "actor": f"Pipeline ({doc.ocr_engine or 'Engine'})",
+                "notes": f"Status: {doc.ocr_status}, Confidence: {round(float(doc.ocr_confidence or 0.0) * 100, 1)}%",
+            })
+        if latest_ver:
+            timeline.append({
+                "event": "STATUTORY_CHECK",
+                "timestamp": latest_ver.checked_at.isoformat() if latest_ver.checked_at else None,
+                "actor": latest_ver.source_name or "Statutory Registry",
+                "notes": f"Automated outcome: {latest_ver.status}. Ref: {latest_ver.source_ref or 'N/A'}",
+            })
+            if latest_ver.manual_decision:
+                timeline.append({
+                    "event": "OFFICER_REVIEW",
+                    "timestamp": latest_ver.manual_reviewed_at.isoformat() if latest_ver.manual_reviewed_at else None,
+                    "actor": latest_ver.reviewer.email if latest_ver.reviewer else "Scrutiny Officer",
+                    "notes": f"Decision: {latest_ver.manual_decision}. Reason: {latest_ver.manual_reason}",
+                })
+
+        # Extracted fields dictionary
+        ext_fields: Dict[str, Any] = {}
+        if doc.extracted_data and isinstance(doc.extracted_data, dict):
+            ext_fields = {k: v for k, v in doc.extracted_data.items() if k != "verification"}
+        elif doc.extracted_fields:
+            for ef in doc.extracted_fields:
+                ext_fields[ef.field_name] = ef.field_value
+
+        official_vals: Dict[str, Any] = (
+            details.get("official_record") or
+            details.get("authority_record") or
+            details.get("mock_register_entry") or
+            {}
+        )
+
+        results.append(
+            VerificationQueueItemDetailed(
+                id=latest_ver.id if latest_ver else 0,
+                document_id=doc.id,
+                document_filename=doc.original_filename,
+                document_type_code=doc.document_type_code,
+                document_type_name=doc.document_type.name if doc.document_type else doc.document_type_code,
+                institute_id=inst.id if inst else doc.institute_id,
+                institute_name=inst.name if inst else f"Institute #{doc.institute_id}",
+                status=cur_status,
+                original_status=details.get("original_automated_status", cur_status),
+                source_name=latest_ver.source_name if latest_ver else getattr(doc.document_type, "authority_adapter", "Statutory Registry"),
+                source_ref=latest_ver.source_ref if latest_ver else None,
+                checked_at=latest_ver.checked_at if latest_ver else None,
+                created_at=doc.created_at,
+                age_days=age_days,
+                assigned_officer_id=doc.assigned_officer_id,
+                assigned_officer_name=assigned_name,
+                file_size=doc.file_size,
+                mime_type=doc.mime_type,
+                manual_decision=latest_ver.manual_decision if latest_ver else None,
+                manual_reason=latest_ver.manual_reason if latest_ver else None,
+                manual_reviewed_by=latest_ver.manual_reviewed_by if latest_ver else None,
+                manual_reviewed_at=latest_ver.manual_reviewed_at if latest_ver else None,
+                message=details.get("message"),
+                matched_fields=details.get("matched_fields", []),
+                mismatched_fields=details.get("mismatched_fields", []),
+                extracted_fields=ext_fields,
+                official_values=official_vals,
+                timeline=timeline,
+            )
+        )
+
+    return results[offset : offset + limit]
+
+
+@router.post("/documents/{document_id}/review-decision", response_model=VerificationQueueItemDetailed)
+def review_document_verification_decision(
+    document_id: int,
+    payload: DocumentReviewDecisionRequest,
+    current_user: User = Depends(require_admin_or_reviewer),
+    db: Session = Depends(get_db),
+):
+    """
+    Submits an administrative review decision on a statutory document verification.
+    The officer's decision overrides the automated status, and the original automated result stays visible.
+    Decision: APPROVED, REJECTED, or REUPLOAD_REQUESTED. Reason is mandatory.
+    """
+    if not payload.reason or len(payload.reason.strip()) < 3:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="A substantive reason (minimum 3 characters) is required for audit accountability.",
+        )
+
+    doc = db.query(Document).filter(Document.id == document_id).first()
+    if not doc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Document with ID {document_id} was not found.",
+        )
+
+    norm_decision = payload.decision.strip().upper()
+    if norm_decision in ["APPROVED", "VERIFIED"]:
+        effective_decision = "APPROVED"
+        new_status = VerificationStatus.VERIFIED
+        doc.status = "Verified"
+    elif norm_decision in ["REJECTED", "MISMATCH"]:
+        effective_decision = "REJECTED"
+        new_status = VerificationStatus.MISMATCH_DETECTED
+        doc.status = "Needs Attention"
+    elif norm_decision in ["REUPLOAD_REQUESTED", "REQUEST_REUPLOAD", "REUPLOAD"]:
+        effective_decision = "REUPLOAD_REQUESTED"
+        new_status = VerificationStatus.MANUAL_REVIEW_REQUIRED
+        doc.status = "Needs Attention"
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid decision '{payload.decision}'. Allowed: APPROVED, REJECTED, REUPLOAD_REQUESTED.",
+        )
+
+    now = datetime.now(timezone.utc)
+    latest_ver = doc.latest_verification
+    if not latest_ver:
+        adapter = getattr(doc.document_type, "authority_adapter", None) or "Statutory Registry"
+        latest_ver = VerificationResult(
+            document_id=doc.id,
+            status=VerificationStatus.MANUAL_REVIEW_REQUIRED,
+            source_name=adapter,
+            source_ref="MANUAL-REVIEW",
+            checked_at=now,
+            details_json={},
+            triggered_by=current_user.id,
+        )
+        db.add(latest_ver)
+        db.flush()
+
+    details = dict(latest_ver.details_json or {})
+    if "original_automated_status" not in details:
+        details["original_automated_status"] = latest_ver.status
+
+    original_automated = details["original_automated_status"]
+
+    latest_ver.status = new_status
+    latest_ver.manual_decision = effective_decision
+    latest_ver.manual_reason = payload.reason.strip()
+    latest_ver.manual_reviewed_by = current_user.id
+    latest_ver.manual_reviewed_at = now
+
+    details["manual_decision"] = effective_decision
+    details["manual_reason"] = payload.reason.strip()
+    details["manual_reviewed_by"] = current_user.id
+    details["manual_reviewed_by_email"] = current_user.email
+    details["manual_reviewed_at"] = now.isoformat()
+    latest_ver.details_json = details
+
+    db.commit()
+    db.refresh(doc)
+    db.refresh(latest_ver)
+
+    AuditService.log_event(
+        db=db,
+        action="DOCUMENT_REVIEW_DECISION",
+        user_id=current_user.id,
+        role=current_user.role,
+        reason=f"Scrutiny decision '{effective_decision}' on Document #{doc.id} ({doc.original_filename}): {payload.reason.strip()}",
+        details={
+            "document_id": doc.id,
+            "decision": effective_decision,
+            "reason": payload.reason.strip(),
+            "original_automated_status": original_automated,
+            "resulting_status": latest_ver.status,
+            "reviewer_id": current_user.id,
+        },
+    )
+
+    inst = doc.institute
+    age_days = max(0, (now - doc.created_at.replace(tzinfo=timezone.utc if doc.created_at.tzinfo is None else doc.created_at.tzinfo)).days)
+
+    return VerificationQueueItemDetailed(
+        id=latest_ver.id,
+        document_id=doc.id,
+        document_filename=doc.original_filename,
+        document_type_code=doc.document_type_code,
+        document_type_name=doc.document_type.name if doc.document_type else doc.document_type_code,
+        institute_id=inst.id if inst else doc.institute_id,
+        institute_name=inst.name if inst else f"Institute #{doc.institute_id}",
+        status=latest_ver.status,
+        original_status=original_automated,
+        source_name=latest_ver.source_name,
+        source_ref=latest_ver.source_ref,
+        checked_at=latest_ver.checked_at,
+        created_at=doc.created_at,
+        age_days=age_days,
+        assigned_officer_id=doc.assigned_officer_id,
+        assigned_officer_name=doc.assigned_officer.email if doc.assigned_officer else None,
+        file_size=doc.file_size,
+        mime_type=doc.mime_type,
+        manual_decision=latest_ver.manual_decision,
+        manual_reason=latest_ver.manual_reason,
+        manual_reviewed_by=latest_ver.manual_reviewed_by,
+        manual_reviewed_at=latest_ver.manual_reviewed_at,
+        message=details.get("message"),
+        matched_fields=details.get("matched_fields", []),
+        mismatched_fields=details.get("mismatched_fields", []),
+        extracted_fields=doc.extracted_data or {},
+        official_values=details.get("official_record", {}),
+        timeline=[],
+    )
+
+
+@router.post("/documents/{document_id}/assign")
+def assign_document_officer(
+    document_id: int,
+    payload: DocumentAssignRequest,
+    current_user: User = Depends(require_admin_or_reviewer),
+    db: Session = Depends(get_db),
+):
+    doc = db.query(Document).filter(Document.id == document_id).first()
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found.")
+
+    doc.assigned_officer_id = payload.officer_id
+    db.commit()
+    db.refresh(doc)
+
+    AuditService.log_event(
+        db=db,
+        action="DOCUMENT_OFFICER_ASSIGNED",
+        user_id=current_user.id,
+        role=current_user.role,
+        reason=f"Document #{doc.id} assigned to Officer ID {payload.officer_id}",
+    )
+    return {"message": "Officer assignment updated successfully.", "assigned_officer_id": doc.assigned_officer_id}
+
+
+# ==============================================================================
+# STAGE 8-ii: ANOMALY REVIEW WORKSPACE
+# ==============================================================================
+
+@router.get("/anomalies", response_model=List[AdminAnomalyFlagOut])
+def get_admin_anomaly_flags(
+    severity: Optional[str] = Query(None, description="Filter by severity: INFO, LOW, MEDIUM, HIGH"),
+    detector: Optional[str] = Query(None, description="Filter by detector class"),
+    status: Optional[str] = Query(None, description="Filter by review status: OPEN, CONFIRMED_OK, NEEDS_ACTION, ESCALATED, DISMISSED"),
+    institute_id: Optional[int] = Query(None, description="Filter by institute ID"),
+    search: Optional[str] = Query(None, description="Search by flag reason, code, or document filename"),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    current_user: User = Depends(require_admin_or_reviewer),
+    db: Session = Depends(get_db),
+):
+    """
+    List anomaly flags with confidence score, evidence, and visual heatmap overlays.
+    Strictly sanitizes reason and action to 'needs verification' / 'potential anomaly'.
+    """
+    query = (
+        db.query(AnomalyFlag)
+        .join(Document, AnomalyFlag.document_id == Document.id)
+        .join(Institute, Document.institute_id == Institute.id)
+    )
+
+    if severity:
+        query = query.filter(AnomalyFlag.severity == severity.upper())
+    if detector:
+        query = query.filter(AnomalyFlag.detector == detector)
+    if status:
+        query = query.filter(AnomalyFlag.review_status == status.upper())
+    if institute_id:
+        query = query.filter(Document.institute_id == institute_id)
+    if search:
+        s = f"%{search.strip()}%"
+        query = query.filter(
+            (AnomalyFlag.reason.ilike(s)) |
+            (AnomalyFlag.code.ilike(s)) |
+            (Document.original_filename.ilike(s)) |
+            (Institute.name.ilike(s))
+        )
+
+    flags = query.order_by(AnomalyFlag.id.desc()).offset(offset).limit(limit).all()
+
+    out: List[AdminAnomalyFlagOut] = []
+    for f in flags:
+        doc = f.document
+        inst = doc.institute if doc else None
+        reviewer_name = f.reviewer.email if f.reviewer else None
+
+        clean_reason = sanitize_anomaly_text(f.reason)
+        clean_action = sanitize_anomaly_text(f.recommended_action)
+
+        out.append(
+            AdminAnomalyFlagOut(
+                id=f.id,
+                run_id=f.run_id,
+                document_id=f.document_id,
+                document_filename=doc.original_filename if doc else None,
+                document_type_code=doc.document_type_code if doc else None,
+                institute_id=inst.id if inst else None,
+                institute_name=inst.name if inst else None,
+                detector=f.detector,
+                code=f.code,
+                group_key=f.group_key,
+                severity=f.severity,
+                reason=clean_reason,
+                confidence=float(f.confidence or 1.0),
+                recommended_action=clean_action,
+                review_status=f.review_status,
+                reviewed_by=f.reviewed_by,
+                reviewed_by_name=reviewer_name,
+                review_note=sanitize_anomaly_text(f.review_note) if f.review_note else None,
+                reviewed_at=f.reviewed_at,
+                overlay_image_path=f.overlay_image_path,
+                has_overlay=f.has_overlay,
+                evidence_json=f.evidence_json or [],
+                created_at=f.created_at,
+            )
+        )
+    return out
+
+
+@router.post("/anomalies/{flag_id}/decision", response_model=AdminAnomalyFlagOut)
+def record_anomaly_decision(
+    flag_id: int,
+    payload: AdminAnomalyDecisionRequest,
+    current_user: User = Depends(require_admin_or_reviewer),
+    db: Session = Depends(get_db),
+):
+    """
+    Records an administrative determination on an anomaly flag.
+    Actions: 'Verified – no concern', 'Needs institute clarification', 'Escalate'.
+    Enforces non-inflammatory terminology and logs the audit event.
+    """
+    flag = db.query(AnomalyFlag).filter(AnomalyFlag.id == flag_id).first()
+    if not flag:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Anomaly flag #{flag_id} not found.",
+        )
+
+    if not payload.note or len(payload.note.strip()) < 3:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="A review note of at least 3 characters is mandatory.",
+        )
+
+    # Clean note against forbidden inflammatory words
+    clean_note = sanitize_anomaly_text(payload.note.strip())
+
+    dec_str = payload.decision.strip()
+    if dec_str in ["Verified – no concern", "CONFIRMED_OK", "VERIFIED"]:
+        target_status = AnomalyReviewStatus.CONFIRMED_OK
+    elif dec_str in ["Needs institute clarification", "NEEDS_ACTION", "CLARIFICATION"]:
+        target_status = AnomalyReviewStatus.NEEDS_ACTION
+    elif dec_str in ["Escalate", "ESCALATED", "ESCALATE"]:
+        target_status = "ESCALATED"
+    elif dec_str in ["DISMISSED"]:
+        target_status = AnomalyReviewStatus.DISMISSED
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid decision '{payload.decision}'. Choose from: 'Verified – no concern', 'Needs institute clarification', 'Escalate'.",
+        )
+
+    old_status = flag.review_status
+    flag.review_status = target_status
+    flag.review_note = clean_note
+    flag.reviewed_by = current_user.id
+    flag.reviewed_at = datetime.now(timezone.utc)
+
+    db.commit()
+    db.refresh(flag)
+
+    AuditService.log_event(
+        db=db,
+        action="ANOMALY_REVIEW_DECISION",
+        user_id=current_user.id,
+        role=current_user.role,
+        reason=f"Anomaly flag #{flag.id} ({flag.detector}) determined as '{payload.decision}': {clean_note}",
+        details={
+            "flag_id": flag.id,
+            "decision": payload.decision,
+            "old_status": old_status,
+            "new_status": target_status,
+            "note": clean_note,
+        },
+    )
+
+    doc = flag.document
+    inst = doc.institute if doc else None
+
+    return AdminAnomalyFlagOut(
+        id=flag.id,
+        run_id=flag.run_id,
+        document_id=flag.document_id,
+        document_filename=doc.original_filename if doc else None,
+        document_type_code=doc.document_type_code if doc else None,
+        institute_id=inst.id if inst else None,
+        institute_name=inst.name if inst else None,
+        detector=flag.detector,
+        code=flag.code,
+        group_key=flag.group_key,
+        severity=flag.severity,
+        reason=sanitize_anomaly_text(flag.reason),
+        confidence=float(flag.confidence or 1.0),
+        recommended_action=sanitize_anomaly_text(flag.recommended_action),
+        review_status=flag.review_status,
+        reviewed_by=flag.reviewed_by,
+        reviewed_by_name=current_user.email,
+        review_note=flag.review_note,
+        reviewed_at=flag.reviewed_at,
+        overlay_image_path=flag.overlay_image_path,
+        has_overlay=flag.has_overlay,
+        evidence_json=flag.evidence_json or [],
+        created_at=flag.created_at,
+    )
+
+
+# ==============================================================================
+# STAGE 8-ii: COMPLAINTS & GRIEVANCE INBOX WORKSPACE
+# ==============================================================================
+
+@router.get("/complaints", response_model=List[AdminComplaintOut])
+def get_admin_complaints(
+    status: Optional[str] = Query(None, description="Filter by status: OPEN, IN_REVIEW, RESOLVED, REJECTED"),
+    category: Optional[str] = Query(None, description="Filter by category"),
+    priority: Optional[str] = Query(None, description="Filter by priority: LOW, MEDIUM, HIGH, URGENT"),
+    institute_id: Optional[int] = Query(None, description="Filter by institute ID"),
+    search: Optional[str] = Query(None, description="Search by ticket ID, subject, or institute name"),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    current_user: User = Depends(require_admin_or_reviewer),
+    db: Session = Depends(get_db),
+):
+    """
+    Central administrative complaints inbox table with full filtering and sorting.
+    """
+    query = db.query(Complaint).join(Institute, Complaint.institute_id == Institute.id)
+
+    if status:
+        query = query.filter(Complaint.status.ilike(status.strip()))
+    if category:
+        query = query.filter(Complaint.category.ilike(f"%{category.strip()}%"))
+    if priority:
+        query = query.filter(Complaint.priority.ilike(priority.strip()))
+    if institute_id:
+        query = query.filter(Complaint.institute_id == institute_id)
+    if search:
+        s = f"%{search.strip()}%"
+        query = query.filter(
+            (Complaint.ticket_id.ilike(s)) |
+            (Complaint.subject.ilike(s)) |
+            (Institute.name.ilike(s))
+        )
+
+    complaints = query.order_by(Complaint.updated_at.desc()).offset(offset).limit(limit).all()
+
+    out: List[AdminComplaintOut] = []
+    for c in complaints:
+        inst = c.institute
+        app = c.application
+        att = c.attachment
+        officer = c.assigned_officer
+
+        event_outs = [
+            ComplaintEventOut(
+                id=ev.id,
+                complaint_id=ev.complaint_id,
+                action=ev.action,
+                notes=ev.notes,
+                created_by=ev.created_by,
+                is_internal=ev.is_internal,
+                created_at=ev.created_at,
+            )
+            for ev in c.events
+        ]
+
+        out.append(
+            AdminComplaintOut(
+                id=c.id,
+                ticket_id=c.ticket_id,
+                institute_id=c.institute_id,
+                institute_name=inst.name if inst else f"Institute #{c.institute_id}",
+                application_id=c.application_id,
+                application_ref=app.application_id if app else None,
+                attachment_document_id=c.attachment_document_id,
+                attachment_filename=att.original_filename if att else None,
+                category=c.category,
+                subject=c.subject,
+                description=c.description,
+                status=c.status,
+                priority=c.priority or "MEDIUM",
+                assigned_to=c.assigned_to,
+                assigned_officer_name=officer.email if officer else None,
+                created_at=c.created_at,
+                updated_at=c.updated_at,
+                events=event_outs,
+            )
+        )
+    return out
+
+
+@router.get("/complaints/{complaint_id}", response_model=AdminComplaintOut)
+def get_admin_complaint_detail(
+    complaint_id: int,
+    current_user: User = Depends(require_admin_or_reviewer),
+    db: Session = Depends(get_db),
+):
+    """
+    Fetch comprehensive grievance detail, including all private internal notes and public exchanges.
+    """
+    c = db.query(Complaint).filter(Complaint.id == complaint_id).first()
+    if not c:
+        raise HTTPException(status_code=404, detail="Complaint ticket not found.")
+
+    inst = c.institute
+    app = c.application
+    att = c.attachment
+    officer = c.assigned_officer
+
+    event_outs = [
+        ComplaintEventOut(
+            id=ev.id,
+            complaint_id=ev.complaint_id,
+            action=ev.action,
+            notes=ev.notes,
+            created_by=ev.created_by,
+            is_internal=ev.is_internal,
+            created_at=ev.created_at,
+        )
+        for ev in c.events
+    ]
+
+    return AdminComplaintOut(
+        id=c.id,
+        ticket_id=c.ticket_id,
+        institute_id=c.institute_id,
+        institute_name=inst.name if inst else f"Institute #{c.institute_id}",
+        application_id=c.application_id,
+        application_ref=app.application_id if app else None,
+        attachment_document_id=c.attachment_document_id,
+        attachment_filename=att.original_filename if att else None,
+        category=c.category,
+        subject=c.subject,
+        description=c.description,
+        status=c.status,
+        priority=c.priority or "MEDIUM",
+        assigned_to=c.assigned_to,
+        assigned_officer_name=officer.email if officer else None,
+        created_at=c.created_at,
+        updated_at=c.updated_at,
+        events=event_outs,
+    )
+
+
+@router.post("/complaints/{complaint_id}/reply", response_model=AdminComplaintOut)
+def admin_reply_complaint(
+    complaint_id: int,
+    payload: AdminComplaintReplyRequest,
+    current_user: User = Depends(require_admin_or_reviewer),
+    db: Session = Depends(get_db),
+):
+    """
+    Submit an officer reply or internal note.
+    On status change or public reply, sends in-app notification and emails the institute.
+    Logs email in email_outbox without failing if SMTP is unconfigured.
+    """
+    c = db.query(Complaint).filter(Complaint.id == complaint_id).first()
+    if not c:
+        raise HTTPException(status_code=404, detail="Complaint ticket not found.")
+
+    now = datetime.now(timezone.utc)
+    status_changed = False
+    old_status = c.status
+
+    if payload.assigned_to is not None and payload.assigned_to != c.assigned_to:
+        c.assigned_to = payload.assigned_to
+        assignee = db.query(User).filter(User.id == payload.assigned_to).first()
+        assign_name = assignee.email if assignee else f"Officer #{payload.assigned_to}"
+        db.add(
+            ComplaintEvent(
+                complaint_id=c.id,
+                action="Officer Assigned",
+                notes=f"Ticket assigned to {assign_name}",
+                created_by=current_user.email,
+                is_internal=True,
+                created_at=now,
+            )
+        )
+
+    if payload.new_status and payload.new_status.strip().upper() != c.status.strip().upper():
+        c.status = payload.new_status.strip()
+        status_changed = True
+        db.add(
+            ComplaintEvent(
+                complaint_id=c.id,
+                action=f"Status Changed: {old_status} -> {c.status}",
+                notes=f"Status modified to '{c.status}' by {current_user.email}",
+                created_by=current_user.email,
+                is_internal=payload.is_internal,
+                created_at=now,
+            )
+        )
+
+    # Add message event
+    action_label = "Internal Officer Note" if payload.is_internal else "Official AICTE Remark"
+    db.add(
+        ComplaintEvent(
+            complaint_id=c.id,
+            action=action_label,
+            notes=payload.notes.strip(),
+            created_by=current_user.email,
+            is_internal=payload.is_internal,
+            created_at=now,
+        )
+    )
+
+    c.updated_at = now
+    db.commit()
+    db.refresh(c)
+
+    # If it is a public remark or status change, trigger in-app notification & email
+    if not payload.is_internal or status_changed:
+        # 1. In-app notification
+        notif = Notification(
+            institute_id=c.institute_id,
+            title=f"Grievance Ticket {c.ticket_id} Update",
+            message=f"Ticket '{c.subject}' status is '{c.status}': {payload.notes.strip()[:140]}",
+            type="COMPLAINT_UPDATE",
+            link="/institute/complaints",
+            is_read=False,
+            created_at=now,
+        )
+        db.add(notif)
+        db.commit()
+
+        # 2. Registered email lookup & email dispatch
+        inst_user = db.query(User).filter(User.institute_id == c.institute_id, User.role == "INSTITUTE").first()
+        recipient_email = inst_user.email if inst_user else "25ec016@skcet.ac.in"
+
+        subject = f"AICTE Scrutiny Desk: Update on Ticket {c.ticket_id}"
+        body = (
+            f"Dear Institute Authority,\n\n"
+            f"Your registered grievance ticket {c.ticket_id} ('{c.subject}') has been updated by the Scrutiny Committee.\n\n"
+            f"Status: {c.status}\n"
+            f"Official Remarks:\n{payload.notes.strip()}\n\n"
+            f"Please log in to the AICTE SmartVerify AI Portal to review the complete timeline.\n\n"
+            f"AICTE SmartVerify AI Grievance Desk"
+        )
+
+        EmailService.send_email(
+            db=db,
+            recipient=recipient_email,
+            subject=subject,
+            body=body,
+        )
+
+    AuditService.log_event(
+        db=db,
+        action="COMPLAINT_ADMIN_REPLY",
+        user_id=current_user.id,
+        role=current_user.role,
+        reason=f"Admin updated ticket {c.ticket_id} (status: {c.status}, internal: {payload.is_internal}): {payload.notes.strip()[:80]}",
+    )
+
+    return get_admin_complaint_detail(complaint_id=c.id, current_user=current_user, db=db)
+
+
+@router.post("/complaints/{complaint_id}/assign")
+def assign_complaint_officer(
+    complaint_id: int,
+    payload: AdminComplaintAssignRequest,
+    current_user: User = Depends(require_admin_or_reviewer),
+    db: Session = Depends(get_db),
+):
+    c = db.query(Complaint).filter(Complaint.id == complaint_id).first()
+    if not c:
+        raise HTTPException(status_code=404, detail="Complaint ticket not found.")
+
+    c.assigned_to = payload.assigned_to
+    now = datetime.now(timezone.utc)
+    c.updated_at = now
+
+    assignee = db.query(User).filter(User.id == payload.assigned_to).first() if payload.assigned_to else None
+    assign_name = assignee.email if assignee else "Unassigned"
+
+    db.add(
+        ComplaintEvent(
+            complaint_id=c.id,
+            action="Officer Reassigned",
+            notes=f"Assigned to {assign_name}",
+            created_by=current_user.email,
+            is_internal=True,
+            created_at=now,
+        )
+    )
+    db.commit()
+
+    return {"message": "Officer assignment updated.", "assigned_to": c.assigned_to}
+
+
+# ==============================================================================
+# STAGE 8-ii: DASHBOARD STATS
+# ==============================================================================
+
+@router.get("/dashboard-stats", response_model=AdminDashboardStats)
+def get_admin_dashboard_metrics(
+    current_user: User = Depends(require_admin_or_reviewer),
+    db: Session = Depends(get_db),
+):
+    """
+    Returns high-level governance counters: pending verifications, open anomalies, and open grievances.
+    """
+    # Pending statutory verifications: documents needing review or pending
+    pending_statuses = [
+        VerificationStatus.MANUAL_REVIEW_REQUIRED,
+        VerificationStatus.SOURCE_UNAVAILABLE,
+        VerificationStatus.MISMATCH_DETECTED,
+        VerificationStatus.VERIFICATION_PENDING,
+    ]
+    # Count documents whose latest verification has one of these statuses or no verification record
+    all_docs = db.query(Document).all()
+    pending_ver_count = 0
+    for d in all_docs:
+        latest = d.latest_verification
+        st = latest.status if latest else VerificationStatus.VERIFICATION_PENDING
+        if st in pending_statuses:
+            pending_ver_count += 1
+
+    open_anomalies_count = (
+        db.query(func.count(AnomalyFlag.id))
+        .filter(AnomalyFlag.review_status == AnomalyReviewStatus.OPEN)
+        .scalar()
+        or 0
+    )
+
+    open_complaints_count = (
+        db.query(func.count(Complaint.id))
+        .filter(Complaint.status.in_(["Open", "OPEN", "In Progress", "IN_REVIEW"]))
+        .scalar()
+        or 0
+    )
+
+    total_rules = db.query(func.count(Rule.id)).scalar() or 0
+    active_rules = db.query(func.count(Rule.id)).filter(Rule.status == "PUBLISHED").scalar() or 0
+    draft_rules = db.query(func.count(Rule.id)).filter(Rule.status == "DRAFT").scalar() or 0
+    doc_types = db.query(func.count(DocumentType.id)).scalar() or 0
+    checklists = db.query(func.count(ChecklistItem.id)).scalar() or 0
+
+    return AdminDashboardStats(
+        pending_verifications_count=pending_ver_count,
+        open_anomalies_count=open_anomalies_count,
+        open_complaints_count=open_complaints_count,
+        total_rules_count=total_rules,
+        active_rules_count=active_rules,
+        draft_rules_count=draft_rules,
+        document_types_count=doc_types,
+        checklists_count=checklists,
+    )
+
 
 
 

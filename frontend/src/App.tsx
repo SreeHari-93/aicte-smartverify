@@ -20,7 +20,9 @@ import { AdminDocumentTypesPage } from './pages/admin/AdminDocumentTypesPage';
 import { AdminChecklistsPage } from './pages/admin/AdminChecklistsPage';
 import { AdminAuditLogPage } from './pages/admin/AdminAuditLogPage';
 import { AdminReportsPage } from './pages/admin/AdminReportsPage';
-import { ComingSoonPage } from './pages/admin/ComingSoonPage';
+import { AdminVerificationQueuePage } from './pages/admin/AdminVerificationQueuePage';
+import { AdminAnomalyReviewPage } from './pages/admin/AdminAnomalyReviewPage';
+import { AdminComplaintsInboxPage } from './pages/admin/AdminComplaintsInboxPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -109,39 +111,10 @@ export const App: React.FC = () => {
               <Route path="rules" element={<AdminRulesPage />} />
               <Route path="document-types" element={<AdminDocumentTypesPage />} />
               <Route path="checklists" element={<AdminChecklistsPage />} />
-              <Route
-                path="verification-queue"
-                element={
-                  <ComingSoonPage
-                    title="Statutory Verification Queue"
-                    moduleName="Verification Queue"
-                    stage="Stage 8-ii"
-                    description="Manual and automated verification queue for statutory external authorities (UGC, Registrar, SWAYAM, Fire, Land Registry)."
-                  />
-                }
-              />
-              <Route
-                path="anomalies"
-                element={
-                  <ComingSoonPage
-                    title="Anomaly Review & Evidence Graph"
-                    moduleName="Anomaly Review"
-                    stage="Stage 8-ii"
-                    description="Scrutiny official review console for items flagged as 'needs verification' or 'potential anomaly' across computer vision and metadata detectors."
-                  />
-                }
-              />
-              <Route
-                path="complaints"
-                element={
-                  <ComingSoonPage
-                    title="Complaints Management Inbox"
-                    moduleName="Complaints Inbox"
-                    stage="Stage 8-ii"
-                    description="Administrative resolution inbox for stakeholder grievances and regulatory compliance queries."
-                  />
-                }
-              />
+              <Route path="verification" element={<AdminVerificationQueuePage />} />
+              <Route path="verification-queue" element={<AdminVerificationQueuePage />} />
+              <Route path="anomalies" element={<AdminAnomalyReviewPage />} />
+              <Route path="complaints" element={<AdminComplaintsInboxPage />} />
               <Route path="reports" element={<AdminReportsPage />} />
               <Route path="audit-log" element={<AdminAuditLogPage />} />
             </Route>

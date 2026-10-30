@@ -86,6 +86,7 @@ from backend.app.schemas.institute import (
     WhyFailedReasonOut,
     ComplaintItem,
     CreateComplaintRequest,
+    InstituteComplaintReplyRequest,
     ReportItem,
     GenerateReportRequest,
     NotificationItem,
@@ -1545,12 +1546,36 @@ def get_complaints(
     user: User = Depends(get_current_institute_user),
     db: Session = Depends(get_db),
 ):
-    return (
+    complaints = (
         db.query(Complaint)
         .filter(Complaint.institute_id == user.institute_id)
         .order_by(Complaint.created_at.desc())
         .all()
     )
+    # Sanitize events to omit internal admin notes
+    for c in complaints:
+        c.events = [e for e in c.events if not getattr(e, "is_internal", False)]
+    return complaints
+
+
+@router.get("/complaints/{complaint_id}", response_model=ComplaintItem)
+def get_complaint_detail(
+    complaint_id: int,
+    user: User = Depends(get_current_institute_user),
+    db: Session = Depends(get_db),
+):
+    complaint = (
+        db.query(Complaint)
+        .filter(Complaint.id == complaint_id, Complaint.institute_id == user.institute_id)
+        .first()
+    )
+    if not complaint:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Complaint ticket not found.",
+        )
+    complaint.events = [e for e in complaint.events if not getattr(e, "is_internal", False)]
+    return complaint
 
 
 @router.post("/complaints", status_code=status.HTTP_201_CREATED)
@@ -1570,6 +1595,7 @@ def raise_complaint(
         description=payload.description,
         attachment_document_id=payload.attachment_document_id,
         status="Open",
+        priority="MEDIUM",
     )
     db.add(complaint)
     db.commit()
@@ -1581,6 +1607,7 @@ def raise_complaint(
         action="Ticket Created",
         notes=f"Complaint lodged by Institute under category '{payload.category}'.",
         created_by="Institute Officer",
+        is_internal=False,
     )
     db.add(event)
     db.commit()
@@ -1593,7 +1620,49 @@ def raise_complaint(
         reason=f"Raised ticket {ticket_id}: {payload.subject}",
     )
 
-    return {"message": "Complaint registered successfully.", "ticket_id": ticket_id}
+    return {"message": "Complaint registered successfully.", "ticket_id": ticket_id, "id": complaint.id}
+
+
+@router.post("/complaints/{complaint_id}/reply", response_model=ComplaintItem)
+def institute_reply_complaint(
+    complaint_id: int,
+    payload: InstituteComplaintReplyRequest,
+    user: User = Depends(get_current_institute_user),
+    db: Session = Depends(get_db),
+):
+    complaint = (
+        db.query(Complaint)
+        .filter(Complaint.id == complaint_id, Complaint.institute_id == user.institute_id)
+        .first()
+    )
+    if not complaint:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Complaint ticket not found.",
+        )
+
+    event = ComplaintEvent(
+        complaint_id=complaint.id,
+        action="Institute Response",
+        notes=payload.notes.strip(),
+        created_by="Institute Officer",
+        is_internal=False,
+    )
+    db.add(event)
+    complaint.updated_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(complaint)
+
+    AuditService.log_event(
+        db=db,
+        action="COMPLAINT_REPLY",
+        user_id=user.id,
+        role=user.role,
+        reason=f"Institute response added to ticket {complaint.ticket_id}",
+    )
+
+    complaint.events = [e for e in complaint.events if not getattr(e, "is_internal", False)]
+    return complaint
 
 
 # ==============================================================================

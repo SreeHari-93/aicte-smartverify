@@ -266,6 +266,7 @@ class ComplaintEventItem(BaseModel):
     action: str
     notes: str
     created_by: str
+    is_internal: bool = False
     created_at: datetime
 
     class Config:
@@ -276,10 +277,12 @@ class ComplaintItem(BaseModel):
     id: int
     ticket_id: str
     application_id: Optional[int] = None
+    attachment_document_id: Optional[int] = None
     category: str
     subject: str
     description: str
     status: str
+    priority: Optional[str] = "MEDIUM"
     created_at: datetime
     updated_at: datetime
     events: List[ComplaintEventItem] = []
@@ -294,6 +297,10 @@ class CreateComplaintRequest(BaseModel):
     subject: str
     description: str
     attachment_document_id: Optional[int] = None
+
+
+class InstituteComplaintReplyRequest(BaseModel):
+    notes: str = Field(..., min_length=2)
 
 
 # --- Report Schemas ---

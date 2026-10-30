@@ -30,12 +30,14 @@ class Document(Base):
     language = Column(String(20), default="en", nullable=True)
     processed_at = Column(DateTime, nullable=True)
     error_message = Column(Text, nullable=True)
+    assigned_officer_id = Column(Integer, ForeignKey("users.id"), nullable=True)
 
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
 
     institute = relationship("Institute")
     application = relationship("Application", back_populates="documents")
     document_type = relationship("DocumentType")
+    assigned_officer = relationship("User", foreign_keys=[assigned_officer_id])
     pages = relationship("DocumentPage", back_populates="document", cascade="all, delete-orphan", order_by="DocumentPage.page_no")
     extracted_fields = relationship("ExtractedField", back_populates="document", cascade="all, delete-orphan")
     classification = relationship("DocumentClassification", back_populates="document", uselist=False, cascade="all, delete-orphan")

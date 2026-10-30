@@ -16,6 +16,7 @@ from backend.app.models.document_type import DocumentType
 from backend.app.models.application_category import ApplicationCategory
 from backend.app.models.checklist_item import ChecklistItem
 from backend.app.models.complaint import Complaint, ComplaintEvent
+from backend.app.models.email_outbox import EmailOutbox
 from backend.app.models.notification import Notification
 from backend.app.models.report import Report
 from backend.app.models.validation_run import (
@@ -62,6 +63,7 @@ __all__ = [
     "ChecklistItem",
     "Complaint",
     "ComplaintEvent",
+    "EmailOutbox",
     "Notification",
     "Report",
     "ValidationRun",

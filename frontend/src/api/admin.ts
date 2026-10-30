@@ -358,5 +358,187 @@ export const adminApi = {
     const res = await apiClient.get<AuditLogOut[]>('/api/v1/admin/audit-logs', { params });
     return res.data;
   },
+
+  // 6. Verification Queue & Decisions
+  listVerificationQueue: async (params?: {
+    status?: string;
+    institute_id?: number;
+    document_type?: string;
+    search?: string;
+    limit?: number;
+    offset?: number;
+  }) => {
+    const res = await apiClient.get<VerificationQueueItemDetailed[]>('/api/v1/admin/verification-queue', { params });
+    return res.data;
+  },
+  reviewDocumentDecision: async (documentId: number, payload: { decision: string; reason: string }) => {
+    const res = await apiClient.post<VerificationQueueItemDetailed>(`/api/v1/admin/documents/${documentId}/review-decision`, payload);
+    return res.data;
+  },
+  assignDocumentOfficer: async (documentId: number, officerId?: number) => {
+    const res = await apiClient.post<{ message: string; assigned_officer_id: number | null }>(`/api/v1/admin/documents/${documentId}/assign`, { officer_id: officerId });
+    return res.data;
+  },
+
+  // 7. Anomalies
+  listAnomalies: async (params?: {
+    severity?: string;
+    detector?: string;
+    status?: string;
+    institute_id?: number;
+    search?: string;
+    limit?: number;
+    offset?: number;
+  }) => {
+    const res = await apiClient.get<AdminAnomalyFlagOut[]>('/api/v1/admin/anomalies', { params });
+    return res.data;
+  },
+  recordAnomalyDecision: async (flagId: number, payload: { decision: string; note: string }) => {
+    const res = await apiClient.post<AdminAnomalyFlagOut>(`/api/v1/admin/anomalies/${flagId}/decision`, payload);
+    return res.data;
+  },
+
+  // 8. Complaints Inbox
+  listComplaints: async (params?: {
+    status?: string;
+    category?: string;
+    priority?: string;
+    institute_id?: number;
+    search?: string;
+    limit?: number;
+    offset?: number;
+  }) => {
+    const res = await apiClient.get<AdminComplaintOut[]>('/api/v1/admin/complaints', { params });
+    return res.data;
+  },
+  getComplaintDetail: async (complaintId: number) => {
+    const res = await apiClient.get<AdminComplaintOut>(`/api/v1/admin/complaints/${complaintId}`);
+    return res.data;
+  },
+  replyComplaint: async (
+    complaintId: number,
+    payload: { notes: string; is_internal?: boolean; new_status?: string; assigned_to?: number }
+  ) => {
+    const res = await apiClient.post<AdminComplaintOut>(`/api/v1/admin/complaints/${complaintId}/reply`, payload);
+    return res.data;
+  },
+  assignComplaintOfficer: async (complaintId: number, assignedTo?: number) => {
+    const res = await apiClient.post<{ message: string; assigned_to: number | null }>(`/api/v1/admin/complaints/${complaintId}/assign`, { assigned_to: assignedTo });
+    return res.data;
+  },
+
+  // 9. Dashboard Metrics
+  getDashboardStats: async () => {
+    const res = await apiClient.get<AdminDashboardStats>('/api/v1/admin/dashboard-stats');
+    return res.data;
+  },
 };
+
+// -------------------------------------------------------------
+// Stage 8-ii Interfaces
+// -------------------------------------------------------------
+
+export interface VerificationQueueItemDetailed {
+  id: number;
+  document_id: number;
+  document_filename: string;
+  document_type_code?: string;
+  document_type_name?: string;
+  institute_id: number;
+  institute_name: string;
+  status: string;
+  original_status?: string;
+  source_name?: string;
+  source_ref?: string;
+  checked_at?: string;
+  created_at: string;
+  age_days: number;
+  assigned_officer_id?: number;
+  assigned_officer_name?: string;
+  file_size: number;
+  mime_type?: string;
+  manual_decision?: string;
+  manual_reason?: string;
+  manual_reviewed_by?: number;
+  manual_reviewed_at?: string;
+  message?: string;
+  matched_fields: Array<Record<string, any>>;
+  mismatched_fields: Array<Record<string, any>>;
+  extracted_fields: Record<string, any>;
+  official_values: Record<string, any>;
+  timeline: Array<{
+    event: string;
+    timestamp?: string;
+    actor: string;
+    notes: string;
+  }>;
+}
+
+export interface AdminAnomalyFlagOut {
+  id: number;
+  run_id: number;
+  document_id: number;
+  document_filename?: string;
+  document_type_code?: string;
+  institute_id?: number;
+  institute_name?: string;
+  detector: string;
+  code: string;
+  group_key?: string;
+  severity: string;
+  reason: string;
+  confidence: number;
+  recommended_action: string;
+  review_status: string;
+  reviewed_by?: number;
+  reviewed_by_name?: string;
+  review_note?: string;
+  reviewed_at?: string;
+  overlay_image_path?: string;
+  has_overlay: boolean;
+  evidence_json: Array<Record<string, any>>;
+  created_at: string;
+}
+
+export interface ComplaintEventOut {
+  id: number;
+  complaint_id: number;
+  action: string;
+  notes: string;
+  created_by: string;
+  is_internal: boolean;
+  created_at: string;
+}
+
+export interface AdminComplaintOut {
+  id: number;
+  ticket_id: string;
+  institute_id: number;
+  institute_name?: string;
+  application_id?: number;
+  application_ref?: string;
+  attachment_document_id?: number;
+  attachment_filename?: string;
+  category: string;
+  subject: string;
+  description: string;
+  status: string;
+  priority: string;
+  assigned_to?: number;
+  assigned_officer_name?: string;
+  created_at: string;
+  updated_at: string;
+  events: ComplaintEventOut[];
+}
+
+export interface AdminDashboardStats {
+  pending_verifications_count: number;
+  open_anomalies_count: number;
+  open_complaints_count: number;
+  total_rules_count: number;
+  active_rules_count: number;
+  draft_rules_count: number;
+  document_types_count: number;
+  checklists_count: number;
+}
 
