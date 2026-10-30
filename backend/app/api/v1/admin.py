@@ -21,6 +21,12 @@ from backend.app.services.document_pipeline.readiness import ReadinessService
 from backend.app.services.validation.runner import ValidationRunner
 from backend.app.services.explainer.root_cause import RootCauseAnalyzer
 from backend.app.services.explainer.narrator import ExplainerNarrator
+from backend.app.services.verification import (
+    VerificationService,
+    ManualConfirmRequest,
+    VerificationResponseOut,
+    VerificationQueueItemOut,
+)
 from backend.app.schemas.institute import (
     ApplicationReadinessResponse,
     DuplicateWarningOut,
@@ -1498,6 +1504,75 @@ def get_admin_assessments_stats(
         common_causes=common_causes,
         most_failed_rules=most_failed_rules,
     )
+
+
+# ==============================================================================
+# STATUTORY VERIFICATION SCRUTINY & MANUAL CONFIRMATION
+# ==============================================================================
+
+@router.get("/verification/queue", response_model=List[VerificationQueueItemOut])
+def get_verification_queue(
+    status: Optional[str] = Query(None, description="Filter queue by status: pending, unavailable, manual_review, mismatch"),
+    user: User = Depends(require_admin_or_reviewer),
+    db: Session = Depends(get_db),
+):
+    """
+    Admin scrutiny queue for statutory documents requiring attention:
+    pending, source unavailable, manual review required, or mismatch detected.
+    """
+    return VerificationService.get_verification_queue(db=db, status_filter=status)
+
+
+@router.post("/verification/{verification_id}/manual-confirm", response_model=VerificationResponseOut)
+def manual_confirm_verification(
+    verification_id: int,
+    payload: ManualConfirmRequest,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """
+    Manually approve or reject a document verification.
+    A non-empty reason is mandatory for audit accountability.
+    """
+    if not payload.reason or not payload.reason.strip():
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Reason is mandatory for manual confirmation.",
+        )
+
+    try:
+        ver_res = VerificationService.manual_confirm(
+            db=db,
+            verification_id=verification_id,
+            admin_user_id=user.id,
+            decision=payload.decision,
+            reason=payload.reason,
+        )
+    except ValueError as ve:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(ve),
+        )
+
+    details = ver_res.details_json or {}
+    return VerificationResponseOut(
+        id=ver_res.id,
+        document_id=ver_res.document_id,
+        status=ver_res.status,
+        source_name=ver_res.source_name,
+        source_ref=ver_res.source_ref,
+        checked_at=ver_res.checked_at,
+        matched_fields=details.get("matched_fields", []),
+        mismatched_fields=details.get("mismatched_fields", []),
+        raw_response_hash=ver_res.response_hash,
+        message=details.get("message"),
+        details=details,
+        manual_decision=ver_res.manual_decision,
+        manual_reason=ver_res.manual_reason,
+        manual_reviewed_by=ver_res.manual_reviewed_by,
+        manual_reviewed_at=ver_res.manual_reviewed_at,
+    )
+
 
 
 

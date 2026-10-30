@@ -1,5 +1,6 @@
 import os
 import hashlib
+import json
 from datetime import date, datetime, timedelta, timezone
 from typing import Dict, Any, List
 
@@ -7,6 +8,8 @@ from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
+from reportlab.graphics.shapes import Drawing
+from reportlab.graphics.barcode.qr import QrCodeWidget
 from sqlalchemy.orm import Session
 
 from backend.app.models.institute import Institute
@@ -84,7 +87,37 @@ def create_synthetic_pdf(
         ])
     )
     elements.append(t)
-    elements.append(Spacer(1, 14))
+    elements.append(Spacer(1, 12))
+
+    # Embed machine-readable QR code on certificate
+    qr_payload_dict = {
+        "certificate_number": (
+            fields.get("certificate_number")
+            or fields.get("noc_number")
+            or fields.get("approval_number")
+            or fields.get("accreditation_id")
+            or fields.get("certificate_id")
+            or fields.get("deed_number")
+            or f"QR-{doc_type_code}"
+        ),
+        "institute_name": fields.get("institute_name", "Sri Krishna College of Engineering and Technology"),
+        "doc_type": doc_type_code,
+        "issue_date": str(fields.get("issue_date") or ""),
+        "expiry_date": str(fields.get("expiry_date") or ""),
+    }
+    qr_json = json.dumps(qr_payload_dict)
+    qr_widget = QrCodeWidget(qr_json)
+    bounds = qr_widget.getBounds()
+    qw = max(1.0, bounds[2] - bounds[0])
+    qh = max(1.0, bounds[3] - bounds[1])
+    qr_drawing = Drawing(80, 80, transform=[80 / qw, 0, 0, 80 / qh, 0, 0])
+    qr_drawing.add(qr_widget)
+
+    elements.append(Paragraph("<b>Statutory Verification QR Code (Machine Readable):</b>", meta_style))
+    elements.append(Spacer(1, 4))
+    elements.append(qr_drawing)
+    elements.append(Spacer(1, 10))
+
     elements.append(
         Paragraph(
             "<i>Security Disclaimer: Synthetic test certificate generated for AICTE SmartVerify AI Stage 3 demonstration. Not for statutory governance.</i>",
@@ -108,9 +141,10 @@ class DemoDataSeeder:
 
     @classmethod
     def seed_all_demo_applications(cls, db: Session) -> Dict[str, Application]:
-        # 0. Ensure Published Rules & RuleSet exist
+        # 0. Ensure Published Rules, RuleSet, AuthoritySources, and MockRegisters exist
         from backend.app.services.demo_rules import seed_published_rules_if_needed
         seed_published_rules_if_needed(db)
+        cls.seed_authority_sources_and_mock_registers(db)
 
         # 1. Resolve or create SKCET institute
         skcet = db.query(Institute).filter(Institute.aicte_institute_id == "SKCET01").first()
@@ -399,4 +433,112 @@ class DemoDataSeeder:
                 )
                 db.add(ef)
 
+        db.commit()
+
+    @classmethod
+    def seed_authority_sources_and_mock_registers(cls, db: Session):
+        from backend.app.models.verification import AuthoritySource, MockRegisterEntry
+        today = date.today()
+        valid_exp = (today + timedelta(days=365)).isoformat()
+        past_exp = (today - timedelta(days=90)).isoformat()
+        issue_valid = (today - timedelta(days=60)).isoformat()
+
+        # 1. Authority Sources
+        sources_catalog = [
+            {"name": "NBA", "base_url": "/mock-authorities/NBA/verify", "auth_type": "API_KEY", "env_secret_key": "NBA_API_KEY"},
+            {"name": "NAAC", "base_url": "/mock-authorities/NAAC/verify", "auth_type": "BEARER", "env_secret_key": "NAAC_API_KEY"},
+            {"name": "FIRE_DEPT", "base_url": "/mock-authorities/FIRE_DEPT/verify", "auth_type": "NONE", "env_secret_key": "FIRE_API_KEY"},
+            {"name": "POLLUTION_BOARD", "base_url": "/mock-authorities/POLLUTION_BOARD/verify", "auth_type": "API_KEY", "env_secret_key": "POLLUTION_API_KEY"},
+            {"name": "MUNICIPAL_CORP", "base_url": "/mock-authorities/MUNICIPAL_CORP/verify", "auth_type": "NONE", "env_secret_key": "MUNICIPAL_API_KEY"},
+        ]
+        for src_data in sources_catalog:
+            src = db.query(AuthoritySource).filter(AuthoritySource.name == src_data["name"]).first()
+            if not src:
+                src = AuthoritySource(
+                    name=src_data["name"],
+                    base_url=src_data["base_url"],
+                    auth_type=src_data["auth_type"],
+                    enabled=True,
+                    env_secret_key=src_data.get("env_secret_key"),
+                )
+                db.add(src)
+            else:
+                src.base_url = src_data["base_url"]
+                src.auth_type = src_data["auth_type"]
+                src.enabled = True
+        db.commit()
+
+        # 2. Mock Register Entries
+        registers_catalog = [
+            # A. VALID: demo certificates
+            {
+                "authority": "NBA",
+                "certificate_number": "NBA-DEMO-READY",
+                "institute_name": "Sri Krishna College of Engineering and Technology",
+                "issue_date": issue_valid,
+                "expiry_date": valid_exp,
+                "status": "VALID",
+                "data_json": {"tier": "Tier-1", "programme": "Computer Science & Engineering", "score": 750},
+            },
+            {
+                "authority": "FIRE_DEPT",
+                "certificate_number": "FSNOC-DEMO-READY",
+                "institute_name": "Sri Krishna College of Engineering and Technology",
+                "issue_date": issue_valid,
+                "expiry_date": valid_exp,
+                "status": "VALID",
+                "data_json": {"hydrant_points": 12, "fire_officer": "R. Ramanathan"},
+            },
+            {
+                "authority": "MUNICIPAL_CORP",
+                "certificate_number": "OCC-DEMO-READY",
+                "institute_name": "Sri Krishna College of Engineering and Technology",
+                "issue_date": (today - timedelta(days=150)).isoformat(),
+                "expiry_date": None,
+                "status": "VALID",
+                "data_json": {"built_up_sqm": 42500, "zone": "Educational Institutional Zone"},
+            },
+            # B. MISMATCHING: one mismatching (institute name mismatch)
+            {
+                "authority": "NBA",
+                "certificate_number": "NBA-DEMO-LIKELY-FAIL",
+                "institute_name": "Apex Global Institute of Engineering",
+                "issue_date": issue_valid,
+                "expiry_date": valid_exp,
+                "status": "VALID",
+                "data_json": {"disclaimer": "Simulated registered holder mismatch"},
+            },
+            # C. EXPIRED: one expired
+            {
+                "authority": "NBA",
+                "certificate_number": "NBA-DEMO-EXPIRED",
+                "institute_name": "Sri Krishna College of Engineering and Technology",
+                "issue_date": (today - timedelta(days=400)).isoformat(),
+                "expiry_date": past_exp,
+                "status": "EXPIRED",
+                "data_json": {"expired": True, "notice": "Statutory renewal overdue"},
+            },
+            {
+                "authority": "MUNICIPAL_CORP",
+                "certificate_number": "OCC-DEMO-BLOCKED",
+                "institute_name": "Sri Krishna College of Engineering and Technology",
+                "issue_date": "2020-01-01",
+                "expiry_date": past_exp,
+                "status": "EXPIRED",
+                "data_json": {"fitness_revoked": True},
+            },
+        ]
+        for reg_data in registers_catalog:
+            clean_c = reg_data["certificate_number"].upper().strip()
+            existing = (
+                db.query(MockRegisterEntry)
+                .filter(MockRegisterEntry.certificate_number == clean_c)
+                .first()
+            )
+            if not existing:
+                entry = MockRegisterEntry(**reg_data)
+                db.add(entry)
+            else:
+                for k, v in reg_data.items():
+                    setattr(existing, k, v)
         db.commit()

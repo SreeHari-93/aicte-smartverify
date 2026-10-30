@@ -24,6 +24,12 @@ from backend.app.models.validation_run import (
     ValidationExplanation,
     FindingNote,
 )
+from backend.app.models.verification import (
+    VerificationResult,
+    VerificationStatus,
+    AuthoritySource,
+    MockRegisterEntry,
+)
 
 __all__ = [
     "User",
@@ -56,4 +62,8 @@ __all__ = [
     "ValidationFinding",
     "ValidationExplanation",
     "FindingNote",
+    "VerificationResult",
+    "VerificationStatus",
+    "AuthoritySource",
+    "MockRegisterEntry",
 ]

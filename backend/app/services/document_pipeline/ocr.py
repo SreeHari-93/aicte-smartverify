@@ -625,6 +625,13 @@ class OCRService:
                                 "days_remaining": ext_res.days_remaining,
                             },
                         )
+
+                        # Run statutory verification automatically after extraction
+                        try:
+                            from backend.app.services.verification import VerificationService
+                            VerificationService.verify_document(db=db, document_id=doc.id, triggered_by=None)
+                        except Exception:
+                            pass
                 except Exception as sub_err:
                     pass
 

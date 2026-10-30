@@ -33,6 +33,10 @@ from backend.app.services.document_pipeline.readiness import ReadinessService
 from backend.app.services.validation.runner import ValidationRunner
 from backend.app.services.explainer.root_cause import RootCauseAnalyzer
 from backend.app.services.explainer.narrator import ExplainerNarrator
+from backend.app.services.verification import (
+    VerificationService,
+    VerificationResponseOut,
+)
 from backend.app.api.deps import get_current_user
 
 from backend.app.schemas.institute import (
@@ -1115,6 +1119,103 @@ def correct_extracted_field(
         field=field_out,
     )
 
+
+@router.post("/documents/{document_id}/verify", response_model=VerificationResponseOut)
+def verify_institute_document(
+    document_id: int,
+    user: User = Depends(get_current_institute_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Trigger or re-trigger statutory verification for an institute document.
+    Enforces institute isolation.
+    """
+    doc = db.query(Document).filter(Document.id == document_id).first()
+    if not doc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Document with ID {document_id} not found.",
+        )
+    if doc.institute_id != user.institute_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Forbidden: Document does not belong to your institute.",
+        )
+
+    ver_res = VerificationService.verify_document(
+        db=db,
+        document_id=doc.id,
+        triggered_by=user.id,
+        force_reverify=True,
+    )
+
+    details = ver_res.details_json or {}
+    return VerificationResponseOut(
+        id=ver_res.id,
+        document_id=ver_res.document_id,
+        status=ver_res.status,
+        source_name=ver_res.source_name,
+        source_ref=ver_res.source_ref,
+        checked_at=ver_res.checked_at,
+        matched_fields=details.get("matched_fields", []),
+        mismatched_fields=details.get("mismatched_fields", []),
+        raw_response_hash=ver_res.response_hash,
+        message=details.get("message"),
+        details=details,
+        manual_decision=ver_res.manual_decision,
+        manual_reason=ver_res.manual_reason,
+        manual_reviewed_by=ver_res.manual_reviewed_by,
+        manual_reviewed_at=ver_res.manual_reviewed_at,
+    )
+
+
+@router.get("/documents/{document_id}/verification", response_model=VerificationResponseOut)
+def get_institute_document_verification(
+    document_id: int,
+    user: User = Depends(get_current_institute_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Fetch the latest statutory verification record for an institute document.
+    Enforces institute isolation.
+    """
+    doc = db.query(Document).filter(Document.id == document_id).first()
+    if not doc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Document with ID {document_id} not found.",
+        )
+    if doc.institute_id != user.institute_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Forbidden: Document does not belong to your institute.",
+        )
+
+    ver_res = VerificationService.get_latest_verification(db=db, document_id=doc.id)
+    if not ver_res:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No verification record found for this document. Verification may be pending.",
+        )
+
+    details = ver_res.details_json or {}
+    return VerificationResponseOut(
+        id=ver_res.id,
+        document_id=ver_res.document_id,
+        status=ver_res.status,
+        source_name=ver_res.source_name,
+        source_ref=ver_res.source_ref,
+        checked_at=ver_res.checked_at,
+        matched_fields=details.get("matched_fields", []),
+        mismatched_fields=details.get("mismatched_fields", []),
+        raw_response_hash=ver_res.response_hash,
+        message=details.get("message"),
+        details=details,
+        manual_decision=ver_res.manual_decision,
+        manual_reason=ver_res.manual_reason,
+        manual_reviewed_by=ver_res.manual_reviewed_by,
+        manual_reviewed_at=ver_res.manual_reviewed_at,
+    )
 
 
 @router.get("/checklist", response_model=InstituteChecklistResponse)

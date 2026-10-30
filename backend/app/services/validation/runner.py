@@ -14,6 +14,7 @@ from backend.app.models.extracted_field import ExtractedField
 from backend.app.models.document_classification import DocumentClassification
 from backend.app.models.rule import Rule, RuleSet
 from backend.app.models.validation_run import ValidationRun, ValidationFinding
+from backend.app.models.verification import VerificationResult
 from backend.app.models.audit_log import AuditLog
 from backend.app.services.audit_service import AuditService
 from backend.app.services.rule_engine.context import EvaluationContext
@@ -147,6 +148,31 @@ class ValidationRunner:
                 .all()
             )
 
+        # Gather VerificationResults for documents
+        doc_ids = [d.id for d in docs]
+        ver_map: Dict[str, Any] = {}
+        if doc_ids:
+            ver_records = (
+                db.query(VerificationResult)
+                .filter(VerificationResult.document_id.in_(doc_ids))
+                .order_by(VerificationResult.id.asc())
+                .all()
+            )
+            for vr in ver_records:
+                details = vr.details_json or {}
+                ver_map[str(vr.document_id)] = {
+                    "id": vr.id,
+                    "document_id": vr.document_id,
+                    "status": vr.status,
+                    "source_name": vr.source_name,
+                    "source_ref": vr.source_ref,
+                    "checked_at": vr.checked_at.isoformat() if vr.checked_at else None,
+                    "matched_fields": details.get("matched_fields", []),
+                    "mismatched_fields": details.get("mismatched_fields", []),
+                    "message": details.get("message"),
+                    "details": details,
+                }
+
         docs_list: List[Dict[str, Any]] = []
         for d in docs:
             # Gather extracted fields (favoring user corrected values)
@@ -187,6 +213,7 @@ class ValidationRunner:
                 "issue_date": issue_str,
                 "is_expired": is_expired,
                 "days_remaining": days_remaining,
+                "verification": ver_map.get(str(d.id)),
             }
             docs_list.append(doc_entry)
 
@@ -196,7 +223,7 @@ class ValidationRunner:
             documents=docs_list,
             courses=courses_list,
             certificates=certs_list,
-            verification={},
+            verification=ver_map,
             evaluation_date=today,
         )
 
@@ -403,6 +430,59 @@ class ValidationRunner:
                         }],
                         "suggested_action": "Ensure document legal name exactly matches institutional registration records or provide an official name change gazette.",
                     })
+
+        # E. Statutory External Verification Findings (MISMATCH_DETECTED, SOURCE_UNAVAILABLE)
+        for doc in app_docs:
+            ver_info = context.verification.get(str(doc.id)) or context.verification.get(doc.id) or (
+                db.query(VerificationResult)
+                .filter(VerificationResult.document_id == doc.id)
+                .order_by(VerificationResult.id.desc())
+                .first()
+            )
+            if not ver_info:
+                continue
+
+            v_status = ver_info.get("status") if isinstance(ver_info, dict) else ver_info.status
+            v_source = ver_info.get("source_name") if isinstance(ver_info, dict) else ver_info.source_name
+            raw_details = ver_info.get("details_json") if isinstance(ver_info, dict) else getattr(ver_info, "details_json", None)
+            if not raw_details and isinstance(ver_info, dict):
+                raw_details = ver_info.get("details")
+            v_details = raw_details if isinstance(raw_details, dict) else {}
+            mismatches = v_details.get("mismatched_fields", [])
+
+            if v_status == "MISMATCH_DETECTED":
+                findings_data.append({
+                    "rule_code": f"DOC_VERIF_MISMATCH_{doc.id}",
+                    "rule_version": ruleset_version,
+                    "rule_title": f"External Verification Mismatch: {doc.original_filename}",
+                    "severity": "MAJOR",
+                    "status": "NEEDS_REVIEW",
+                    "reason": f"Statutory authority ({v_source}) detected mismatching certificate details for '{doc.original_filename}'.",
+                    "evidence_json": [{
+                        "document_id": doc.id,
+                        "filename": doc.original_filename,
+                        "source_name": v_source,
+                        "status": v_status,
+                        "mismatched_fields": mismatches,
+                    }],
+                    "suggested_action": "Review mismatched certificate details with the issuing authority or submit corrected statutory certificate.",
+                })
+            elif v_status == "SOURCE_UNAVAILABLE":
+                findings_data.append({
+                    "rule_code": f"DOC_VERIF_UNAVAIL_{doc.id}",
+                    "rule_version": ruleset_version,
+                    "rule_title": f"Authority Source Unavailable: {doc.original_filename}",
+                    "severity": "MINOR",
+                    "status": "NEEDS_REVIEW",
+                    "reason": f"External issuing authority ({v_source}) was unreachable after 3 attempts / circuit breaker tripped. Routed to manual scrutiny.",
+                    "evidence_json": [{
+                        "document_id": doc.id,
+                        "filename": doc.original_filename,
+                        "source_name": v_source,
+                        "status": v_status,
+                    }],
+                    "suggested_action": "Refer to admin verification queue for manual physical verification by the scrutiny committee.",
+                })
 
         # 6. Compute Counts, Overall Status, and Score Deterministically
         blocker_count = sum(1 for f in findings_data if f["status"] != "PASS" and f["severity"] == "BLOCKER")

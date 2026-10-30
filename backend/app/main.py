@@ -9,6 +9,7 @@ from backend.app.database import engine, Base, SessionLocal
 from backend.app.api.v1.auth import router as auth_router
 from backend.app.api.v1.institute import router as institute_router
 from backend.app.api.v1.admin import router as admin_router
+from backend.app.api.v1.mock_authorities import router as mock_authorities_router
 from backend.app.services.notification_service import check_and_create_certificate_notifications
 
 # Initialize database schema
@@ -89,6 +90,9 @@ app.include_router(institute_router, prefix="/api/v1")
 
 app.include_router(admin_router, prefix="/api")
 app.include_router(admin_router, prefix="/api/v1")
+
+app.include_router(mock_authorities_router, prefix="/mock-authorities")
+app.include_router(mock_authorities_router, prefix="/api/mock-authorities")
 
 
 @app.get("/api/health", tags=["System"])
