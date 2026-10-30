@@ -37,6 +37,7 @@ from backend.app.models.anomaly import (
     AnomalySeverity,
     AnomalyReviewStatus,
 )
+from backend.app.models.evaluation import EvaluationRun, AIFeedback
 
 __all__ = [
     "User",
@@ -78,4 +79,6 @@ __all__ = [
     "AnomalyFlag",
     "AnomalySeverity",
     "AnomalyReviewStatus",
+    "EvaluationRun",
+    "AIFeedback",
 ]

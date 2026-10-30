@@ -76,15 +76,16 @@ ISSUE_DATE_PATTERNS = [
 ]
 
 INSTITUTE_NAME_PATTERNS = [
-    r"issued\s*to\b",
-    r"institute\s*name\b",
-    r"institution\s*name\b",
-    r"name\s*of\s*(?:the\s*)?institution\b",
-    r"name\s*of\s*(?:the\s*)?institute\b",
-    r"name\s*of\s*(?:the\s*)?college\b",
-    r"college\s*name\b",
-    r"certified\s*that\b",
-    r"in\s*favou?r\s*of\b",
+    r"issued\s*to(?:\s*\([^)]*\))?",
+    r"institute\s*name(?:\s*\([^)]*\))?",
+    r"institution\s*name(?:\s*\([^)]*\))?",
+    r"name\s*of\s*(?:the\s*)?institution",
+    r"name\s*of\s*(?:the\s*)?institute",
+    r"name\s*of\s*(?:the\s*)?college",
+    r"college\s*name",
+    r"certified\s*that",
+    r"in\s*favou?r\s*of",
+    r"records\s*of",
 ]
 
 BUILDING_NAME_PATTERNS = [
@@ -284,10 +285,11 @@ def extract_date_field(
 
 def extract_text_after_patterns(lines: List[str], patterns: List[str]) -> Optional[str]:
     """
-    Scans lines for given regex label patterns, capturing the full value up to the end of the line.
+    Scans lines for given regex label patterns, capturing the full value up to the end of the line,
+    or on the next line if the current line ends with the label pattern.
     Rejects values that are simply label words.
     """
-    for line in lines:
+    for idx, line in enumerate(lines):
         line_clean = line.strip()
         for pat in patterns:
             # Pattern followed by colon, hyphen, hash or multiple whitespace
@@ -298,7 +300,20 @@ def extract_text_after_patterns(lines: List[str], patterns: List[str]) -> Option
                 val = m.group(1).strip()
                 val = re.sub(r"^[:\-#\s]+", "", val).strip()
                 if val.lower() not in DISALLOWED_LABEL_VALUES and len(val) >= 2:
+                    # Check if next line continues the value (e.g. "Sri Krishna College of Engineering and\nTechnology")
+                    if (val.endswith(" and") or val.endswith(" of") or val.endswith("&")) and idx + 1 < len(lines):
+                        next_l = lines[idx + 1].strip()
+                        if not re.search(r"^[A-Za-z\s]{3,25}:", next_l):
+                            val = f"{val} {next_l}".strip()
                     return val
+
+            # Check next line if current line ends with the label
+            if re.search(r"(?i)\b(?:" + pat + r")\s*[:\-#]?\s*$", line_clean):
+                if idx + 1 < len(lines):
+                    next_val = lines[idx + 1].strip()
+                    if next_val.lower() not in DISALLOWED_LABEL_VALUES and len(next_val) >= 2:
+                        if not re.search(r"^[A-Za-z\s]{3,25}:", next_val):
+                            return next_val
     return None
 
 
@@ -538,7 +553,7 @@ class DocumentExtractor:
             if cert_val:
                 p_no, bbox = cls._locate_token_position(cert_val, pages_info)
                 # Update schema field if empty
-                matched_idx = next((i for i, f in enumerate(extracted_fields) if f.key in ("noc_number", "certificate_number")), None)
+                matched_idx = next((i for i, f in enumerate(extracted_fields) if f.key in ("noc_number", "certificate_number", "approval_number", "deed_number", "registration_number", "order_number")), None)
                 if matched_idx is not None and not extracted_fields[matched_idx].value:
                     extracted_fields[matched_idx] = ExtractedFieldResult(
                         key=extracted_fields[matched_idx].key,
@@ -550,7 +565,8 @@ class DocumentExtractor:
                         source="rule",
                         needs_review=False,
                     )
-                else:
+                # Also ensure a common certificate_number key is present for cross-document consistency
+                if "certificate_number" not in existing_keys:
                     extracted_fields.append(
                         ExtractedFieldResult(
                             key="certificate_number",

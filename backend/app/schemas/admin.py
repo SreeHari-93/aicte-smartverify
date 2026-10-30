@@ -516,4 +516,58 @@ class AdminGenerateReportRequest(BaseModel):
     language: str = "en"
 
 
+# -------------------------------------------------------------
+# Stage 9: Evaluation Runs & Feedback
+# -------------------------------------------------------------
+
+class EvaluationRunOut(BaseModel):
+    id: int
+    dataset_version: str
+    status: str
+    overall_accuracy: float
+    total_samples: int
+    passed_samples: int
+    metrics_json: Dict[str, Any]
+    failed_cases_json: List[Dict[str, Any]]
+    git_commit: Optional[str] = None
+    started_at: datetime
+    finished_at: Optional[datetime] = None
+    duration_seconds: float
+
+    class Config:
+        from_attributes = True
+
+
+class AIFeedbackCreate(BaseModel):
+    target_type: str  # CLASSIFICATION | EXTRACTION | ANOMALY | VERIFICATION
+    target_id: int
+    document_id: Optional[int] = None
+    is_correct: bool
+    correction_notes: Optional[str] = None
+    feedback_metadata: Optional[Dict[str, Any]] = None
+
+
+class AIFeedbackOut(BaseModel):
+    id: int
+    user_id: Optional[int] = None
+    target_type: str
+    target_id: int
+    document_id: Optional[int] = None
+    is_correct: bool
+    correction_notes: Optional[str] = None
+    feedback_metadata: Optional[Dict[str, Any]] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class FeedbackStatsOut(BaseModel):
+    total_feedback: int
+    correct_count: int
+    incorrect_count: int
+    agreement_rate_pct: float
+
+
+
 

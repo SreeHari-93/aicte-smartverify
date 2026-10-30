@@ -23,6 +23,7 @@ import { AdminReportsPage } from './pages/admin/AdminReportsPage';
 import { AdminVerificationQueuePage } from './pages/admin/AdminVerificationQueuePage';
 import { AdminAnomalyReviewPage } from './pages/admin/AdminAnomalyReviewPage';
 import { AdminComplaintsInboxPage } from './pages/admin/AdminComplaintsInboxPage';
+import { AdminEvaluationPage } from './pages/admin/AdminEvaluationPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -115,6 +116,7 @@ export const App: React.FC = () => {
               <Route path="verification-queue" element={<AdminVerificationQueuePage />} />
               <Route path="anomalies" element={<AdminAnomalyReviewPage />} />
               <Route path="complaints" element={<AdminComplaintsInboxPage />} />
+              <Route path="evaluation" element={<AdminEvaluationPage />} />
               <Route path="reports" element={<AdminReportsPage />} />
               <Route path="audit-log" element={<AdminAuditLogPage />} />
             </Route>

@@ -10,6 +10,7 @@ import {
   MessageSquare,
   FileBarChart,
   ScrollText,
+  Cpu,
 } from 'lucide-react';
 
 interface AdminSidebarProps {
@@ -25,6 +26,7 @@ export const ADMIN_NAV_ITEMS = [
   { label: 'Verification Queue', path: '/admin/verification-queue', icon: Clock },
   { label: 'Anomalies', path: '/admin/anomalies', icon: AlertTriangle },
   { label: 'Complaints', path: '/admin/complaints', icon: MessageSquare },
+  { label: 'AI Evaluation', path: '/admin/evaluation', icon: Cpu },
   { label: 'Reports', path: '/admin/reports', icon: FileBarChart },
   { label: 'Audit Log', path: '/admin/audit-log', icon: ScrollText },
 ];

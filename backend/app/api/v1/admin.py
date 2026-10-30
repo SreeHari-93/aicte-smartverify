@@ -24,7 +24,9 @@ from backend.app.models.email_outbox import EmailOutbox
 from backend.app.models.verification import VerificationResult, VerificationStatus
 from backend.app.models.anomaly import AnomalyFlag, AnomalyReviewStatus
 from backend.app.models.report import Report
+from backend.app.models.evaluation import EvaluationRun, AIFeedback
 from backend.app.services.report_service import ReportService
+from backend.app.services.evaluation import EvaluationRunner, EvaluationExporter
 from backend.app.services.audit_service import AuditService
 from backend.app.services.email_service import EmailService
 from backend.app.services.rule_engine.schemas import RuleDefinition
@@ -103,6 +105,10 @@ from backend.app.schemas.admin import (
     AdminDashboardStats,
     AdminReportItem,
     AdminGenerateReportRequest,
+    EvaluationRunOut,
+    AIFeedbackCreate,
+    AIFeedbackOut,
+    FeedbackStatsOut,
 )
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -2924,6 +2930,169 @@ def download_admin_report(
         filename=rep.filename,
         headers={"Content-Disposition": f'attachment; filename="{rep.filename}"'},
     )
+
+
+# ==============================================================================
+# STAGE 9: AI EVALUATION & HUMAN FEEDBACK ENDPOINTS
+# ==============================================================================
+
+@router.post("/evaluation/run", response_model=EvaluationRunOut)
+def trigger_evaluation_run(
+    subset_limit: Optional[int] = Query(None, ge=1, le=200, description="Optional subset size for fast evaluation"),
+    current_user: User = Depends(require_admin_or_reviewer),
+    db: Session = Depends(get_db),
+):
+    """
+    Executes an AI evaluation run comparing pipeline predictions (OCR, classification,
+    extraction, validation, anomaly detection, explainer grounding) against ground-truth labels.
+    """
+    eval_run = EvaluationRunner.run_evaluation(db=db, subset_limit=subset_limit)
+
+    AuditService.log_event(
+        db=db,
+        action="EVALUATION_RUN_COMPLETED",
+        user_id=current_user.id,
+        role=current_user.role,
+        reason=f"Executed AI evaluation run #{eval_run.id}: Accuracy {eval_run.overall_accuracy}%, {eval_run.total_samples} samples",
+        details={"run_id": eval_run.id, "accuracy": eval_run.overall_accuracy, "samples": eval_run.total_samples},
+    )
+
+    return eval_run
+
+
+@router.get("/evaluation/runs", response_model=List[EvaluationRunOut])
+def get_evaluation_runs(
+    limit: int = Query(50, ge=1, le=200),
+    current_user: User = Depends(require_admin_or_reviewer),
+    db: Session = Depends(get_db),
+):
+    """
+    Returns history of past AI evaluation runs.
+    """
+    return db.query(EvaluationRun).order_by(EvaluationRun.id.desc()).limit(limit).all()
+
+
+@router.get("/evaluation/runs/{run_id}", response_model=EvaluationRunOut)
+def get_evaluation_run_detail(
+    run_id: int,
+    current_user: User = Depends(require_admin_or_reviewer),
+    db: Session = Depends(get_db),
+):
+    """
+    Returns detailed metrics and failed cases for a specific evaluation run.
+    """
+    run = db.query(EvaluationRun).filter(EvaluationRun.id == run_id).first()
+    if not run:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evaluation run not found.")
+    return run
+
+
+@router.get("/evaluation/runs/{run_id}/export/csv")
+def export_evaluation_run_csv(
+    run_id: int,
+    current_user: User = Depends(require_admin_or_reviewer),
+    db: Session = Depends(get_db),
+):
+    """
+    Exports full metrics and failed cases of an evaluation run as CSV.
+    """
+    run = db.query(EvaluationRun).filter(EvaluationRun.id == run_id).first()
+    if not run:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evaluation run not found.")
+
+    csv_content = EvaluationExporter.export_csv(run)
+    filename = f"evaluation_run_{run.id}_metrics.csv"
+    return Response(
+        content=csv_content,
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/evaluation/runs/{run_id}/export/pdf")
+def export_evaluation_run_pdf(
+    run_id: int,
+    current_user: User = Depends(require_admin_or_reviewer),
+    db: Session = Depends(get_db),
+):
+    """
+    Exports a one-page executive summary PDF for the evaluation run.
+    """
+    run = db.query(EvaluationRun).filter(EvaluationRun.id == run_id).first()
+    if not run:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evaluation run not found.")
+
+    tmp_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "demo_data")
+    os.makedirs(tmp_dir, exist_ok=True)
+    pdf_path = os.path.join(tmp_dir, f"eval_run_{run.id}_summary.pdf")
+
+    EvaluationExporter.export_pdf(run, pdf_path)
+    filename = f"evaluation_run_{run.id}_summary.pdf"
+    return FileResponse(
+        path=pdf_path,
+        media_type="application/pdf",
+        filename=filename,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.post("/feedback", response_model=AIFeedbackOut, status_code=status.HTTP_201_CREATED)
+def submit_ai_feedback(
+    payload: AIFeedbackCreate,
+    current_user: User = Depends(require_admin_or_reviewer),
+    db: Session = Depends(get_db),
+):
+    """
+    Stores human-in-the-loop validation feedback from scrutiny officers
+    (marking AI classification, extraction, verification or anomaly signals as correct/incorrect).
+    """
+    fb = AIFeedback(
+        user_id=current_user.id,
+        target_type=payload.target_type.upper(),
+        target_id=payload.target_id,
+        document_id=payload.document_id,
+        is_correct=payload.is_correct,
+        correction_notes=payload.correction_notes,
+        feedback_metadata=payload.feedback_metadata or {},
+        created_at=datetime.now(timezone.utc),
+    )
+    db.add(fb)
+    db.commit()
+    db.refresh(fb)
+
+    AuditService.log_event(
+        db=db,
+        action="AI_FEEDBACK_RECORDED",
+        user_id=current_user.id,
+        role=current_user.role,
+        reason=f"Recorded human feedback for {payload.target_type} #{payload.target_id}: {'CORRECT' if payload.is_correct else 'INCORRECT'}",
+        details={"feedback_id": fb.id, "target_type": payload.target_type, "target_id": payload.target_id, "is_correct": payload.is_correct},
+    )
+
+    return fb
+
+
+@router.get("/evaluation/feedback-stats", response_model=FeedbackStatsOut)
+def get_ai_feedback_statistics(
+    current_user: User = Depends(require_admin_or_reviewer),
+    db: Session = Depends(get_db),
+):
+    """
+    Computes agreement rate between AI predictions and scrutiny officer manual feedback.
+    """
+    all_fb = db.query(AIFeedback).all()
+    total = len(all_fb)
+    correct = sum(1 for f in all_fb if f.is_correct)
+    incorrect = total - correct
+    rate = round((correct / total) * 100.0, 1) if total > 0 else 100.0
+
+    return FeedbackStatsOut(
+        total_feedback=total,
+        correct_count=correct,
+        incorrect_count=incorrect,
+        agreement_rate_pct=rate,
+    )
+
 
 
 

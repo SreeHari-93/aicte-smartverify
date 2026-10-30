@@ -1,0 +1,959 @@
+{
+  "dataset_version": "v1.0",
+  "created_at": "2026-10-30",
+  "total_documents": 63,
+  "document_types_count": 19,
+  "labels": [
+    {
+      "file_name": "FIRE_NOC_var1.pdf",
+      "document_type": "FIRE_NOC",
+      "expected_fields": {
+        "certificate_number": "FIR-2026-1001",
+        "institute_name": "Sri Krishna College of Engineering and Technology",
+        "issue_date": "2026-05-03",
+        "expiry_date": "2028-05-02"
+      },
+      "expected_expiry_status": "valid",
+      "expected_anomalies": [],
+      "is_noisy_ocr": false,
+      "date_format_used": "DD-MM-YYYY",
+      "has_qr": true
+    },
+    {
+      "file_name": "FIRE_NOC_var2.pdf",
+      "document_type": "FIRE_NOC",
+      "expected_fields": {
+        "certificate_number": "FIR-2026-1002",
+        "institute_name": "Sri Krishna College of Engineering and Technology",
+        "issue_date": "2024-11-24",
+        "expiry_date": "2026-11-24"
+      },
+      "expected_expiry_status": "expiring soon",
+      "expected_anomalies": [],
+      "is_noisy_ocr": false,
+      "date_format_used": "DD/MM/YYYY",
+      "has_qr": false
+    },
+    {
+      "file_name": "FIRE_NOC_var3.pdf",
+      "document_type": "FIRE_NOC",
+      "expected_fields": {
+        "certificate_number": "FIR-2026-1003",
+        "institute_name": "Sri Krishna College of Engineering and Technology",
+        "issue_date": "2024-08-01",
+        "expiry_date": "2026-08-01"
+      },
+      "expected_expiry_status": "expired",
+      "expected_anomalies": [],
+      "is_noisy_ocr": false,
+      "date_format_used": "YYYY-MM-DD",
+      "has_qr": true
+    },
+    {
+      "file_name": "FIRE_NOC_var4.pdf",
+      "document_type": "FIRE_NOC",
+      "expected_fields": {
+        "certificate_number": "FIR-2026-1004",
+        "institute_name": "Sri Krishna College of Engineering and Technology",
+        "issue_date": "2026-08-31",
+        "expiry_date": "2028-08-30"
+      },
+      "expected_expiry_status": "valid",
+      "expected_anomalies": [],
+      "is_noisy_ocr": true,
+      "date_format_used": "TEXT",
+      "has_qr": false
+    },
+    {
+      "file_name": "BUILDING_PLAN_var1.pdf",
+      "document_type": "BUILDING_PLAN",
+      "expected_fields": {
+        "certificate_number": "BUI-2026-1005",
+        "institute_name": "Sri Krishna College of Engineering and Technology",
+        "issue_date": "2024-10-30",
+        "expiry_date": null
+      },
+      "expected_expiry_status": "valid",
+      "expected_anomalies": [],
+      "is_noisy_ocr": false,
+      "date_format_used": "DD-MM-YYYY",
+      "has_qr": true
+    },
+    {
+      "file_name": "BUILDING_PLAN_var2.pdf",
+      "document_type": "BUILDING_PLAN",
+      "expected_fields": {
+        "certificate_number": "BUI-2026-1006",
+        "institute_name": "Sri Krishna College of Engineering and Technology",
+        "issue_date": "2024-10-30",
+        "expiry_date": null
+      },
+      "expected_expiry_status": "valid",
+      "expected_anomalies": [],
+      "is_noisy_ocr": false,
+      "date_format_used": "DD/MM/YYYY",
+      "has_qr": false
+    },
+    {
+      "file_name": "BUILDING_PLAN_var3.pdf",
+      "document_type": "BUILDING_PLAN",
+      "expected_fields": {
+        "certificate_number": "BUI-2026-1007",
+        "institute_name": "Sri Krishna College of Engineering and Technology",
+        "issue_date": "2024-10-30",
+        "expiry_date": null
+      },
+      "expected_expiry_status": "valid",
+      "expected_anomalies": [],
+      "is_noisy_ocr": false,
+      "date_format_used": "YYYY-MM-DD",
+      "has_qr": true
+    },
+    {
+      "file_name": "BUILDING_PLAN_var4.pdf",
+      "document_type": "BUILDING_PLAN",
+      "expected_fields": {
+        "certificate_number": "BUI-2026-1008",
+        "institute_name": "Sri Krishna College of Engineering and Technology",
+        "issue_date": "2024-10-30",
+        "expiry_date": null
+      },
+      "expected_expiry_status": "valid",
+      "expected_anomalies": [],
+      "is_noisy_ocr": true,
+      "date_format_used": "TEXT",
+      "has_qr": false
+    },
+    {
+      "file_name": "OCCUPANCY_CERT_var1.pdf",
+      "document_type": "OCCUPANCY_CERT",
+      "expected_fields": {
+        "certificate_number": "OCC-2026-1009",
+        "institute_name": "Sri Krishna College of Engineering and Technology",
+        "issue_date": "2024-10-30",
+        "expiry_date": null
+      },
+      "expected_expiry_status": "valid",
+      "expected_anomalies": [],
+      "is_noisy_ocr": false,
+      "date_format_used": "DD-MM-YYYY",
+      "has_qr": true
+    },
+    {
+      "file_name": "OCCUPANCY_CERT_var2.pdf",
+      "document_type": "OCCUPANCY_CERT",
+      "expected_fields": {
+        "certificate_number": "OCC-2026-1010",
+        "institute_name": "Sri Krishna College of Engineering and Technology",
+        "issue_date": "2024-10-30",
+        "expiry_date": null
+      },
+      "expected_expiry_status": "valid",
+      "expected_anomalies": [],
+      "is_noisy_ocr": false,
+      "date_format_used": "DD/MM/YYYY",
+      "has_qr": false
+    },
+    {
+      "file_name": "OCCUPANCY_CERT_var3.pdf",
+      "document_type": "OCCUPANCY_CERT",
+      "expected_fields": {
+        "certificate_number": "OCC-2026-1011",
+        "institute_name": "Sri Krishna College of Engineering and Technology",
+        "issue_date": "2024-10-30",
+        "expiry_date": null
+      },
+      "expected_expiry_status": "valid",
+      "expected_anomalies": [],
+      "is_noisy_ocr": false,
+      "date_format_used": "YYYY-MM-DD",
+      "has_qr": true
+    },
+    {
+      "file_name": "LAND_DOC_var1.pdf",
+      "document_type": "LAND_DOC",
+      "expected_fields": {
+        "certificate_number": "LAN-2026-1012",
+        "institute_name": "Sri Krishna College of Engineering and Technology",
+        "issue_date": "2026-05-03",
+        "expiry_date": "2056-04-25"
+      },
+      "expected_expiry_status": "valid",
+      "expected_anomalies": [],
+      "is_noisy_ocr": true,
+      "date_format_used": "DD-MM-YYYY",
+      "has_qr": true
+    },
+    {
+      "file_name": "LAND_DOC_var2.pdf",
+      "document_type": "LAND_DOC",
+      "expected_fields": {
+        "certificate_number": "LAN-2026-1013",
+        "institute_name": "Sri Krishna College of Engineering and Technology",
+        "issue_date": "1996-12-01",
+        "expiry_date": "2026-11-24"
+      },
+      "expected_expiry_status": "expiring soon",
+      "expected_anomalies": [],
+      "is_noisy_ocr": false,
+      "date_format_used": "DD/MM/YYYY",
+      "has_qr": false
+    },
+    {
+      "file_name": "LAND_DOC_var3.pdf",
+      "document_type": "LAND_DOC",
+      "expected_fields": {
+        "certificate_number": "LAN-2026-1014",
+        "institute_name": "Sri Krishna College of Engineering and Technology",
+        "issue_date": "1996-08-08",
+        "expiry_date": "2026-08-01"
+      },
+      "expected_expiry_status": "expired",
+      "expected_anomalies": [],
+      "is_noisy_ocr": false,
+      "date_format_used": "YYYY-MM-DD",
+      "has_qr": true
+    },
+    {
+      "file_name": "LAND_DOC_var4.pdf",
+      "document_type": "LAND_DOC",
+      "expected_fields": {
+        "certificate_number": "LAN-2026-1015",
+        "institute_name": "Sri Krishna College of Arts & Commerce",
+        "issue_date": "2026-08-31",
+        "expiry_date": "2056-08-23"
+      },
+      "expected_expiry_status": "valid",
+      "expected_anomalies": [
+        "name_mismatch"
+      ],
+      "is_noisy_ocr": false,
+      "date_format_used": "TEXT",
+      "has_qr": false
+    },
+    {
+      "file_name": "AFFIDAVIT_var1.pdf",
+      "document_type": "AFFIDAVIT",
+      "expected_fields": {
+        "certificate_number": "AFF-2026-1016",
+        "institute_name": "Sri Krishna College of Engineering and Technology",
+        "issue_date": "2026-05-03",
+        "expiry_date": "2027-05-03"
+      },
+      "expected_expiry_status": "valid",
+      "expected_anomalies": [],
+      "is_noisy_ocr": true,
+      "date_format_used": "DD-MM-YYYY",
+      "has_qr": true
+    },
+    {
+      "file_name": "AFFIDAVIT_var2.pdf",
+      "document_type": "AFFIDAVIT",
+      "expected_fields": {
+        "certificate_number": "AFF-2026-1017",
+        "institute_name": "Sri Krishna College of Engineering and Technology",
+        "issue_date": "2025-11-24",
+        "expiry_date": "2026-11-24"
+      },
+      "expected_expiry_status": "expiring soon",
+      "expected_anomalies": [],
+      "is_noisy_ocr": false,
+      "date_format_used": "DD/MM/YYYY",
+      "has_qr": false
+    },
+    {
+      "file_name": "AFFIDAVIT_var3.pdf",
+      "document_type": "AFFIDAVIT",
+      "expected_fields": {
+        "certificate_number": "AFF-2026-1018",
+        "institute_name": "Sri Krishna College of Engineering and Technology",
+        "issue_date": "2025-08-01",
+        "expiry_date": "2025-07-02"
+      },
+      "expected_expiry_status": "expired",
+      "expected_anomalies": [
+        "date_inconsistency"
+      ],
+      "is_noisy_ocr": false,
+      "date_format_used": "YYYY-MM-DD",
+      "has_qr": true
+    },
+    {
+      "file_name": "AFFIDAVIT_var4.pdf",
+      "document_type": "AFFIDAVIT",
+      "expected_fields": {
+        "certificate_number": "AFF-2026-1019",
+        "institute_name": "Sri Krishna College of Engineering and Technology",
+        "issue_date": "2026-08-31",
+        "expiry_date": "2027-08-31"
+      },
+      "expected_expiry_status": "valid",
+      "expected_anomalies": [],
+      "is_noisy_ocr": false,
+      "date_format_used": "TEXT",
+      "has_qr": false
+    },
+    {
+      "file_name": "DEED_CONV_var1.pdf",
+      "document_type": "DEED_CONV",
+      "expected_fields": {
+        "certificate_number": "DEE-2026-1020",
+        "institute_name": "Sri Krishna College of Engineering and Technology",
+        "issue_date": "2024-10-30",
+        "expiry_date": null
+      },
+      "expected_expiry_status": "valid",
+      "expected_anomalies": [],
+      "is_noisy_ocr": true,
+      "date_format_used": "DD-MM-YYYY",
+      "has_qr": true
+    },
+    {
+      "file_name": "DEED_CONV_var2.pdf",
+      "document_type": "DEED_CONV",
+      "expected_fields": {
+        "certificate_number": "DEE-2026-1021",
+        "institute_name": "Sri Krishna College of Engineering and Technology",
+        "issue_date": "2024-10-30",
+        "expiry_date": null
+      },
+      "expected_expiry_status": "valid",
+      "expected_anomalies": [],
+      "is_noisy_ocr": false,
+      "date_format_used": "DD/MM/YYYY",
+      "has_qr": false
+    },
+    {
+      "file_name": "DEED_CONV_var3.pdf",
+      "document_type": "DEED_CONV",
+      "expected_fields": {
+        "certificate_number": "DEE-2026-1022",
+        "institute_name": "Sri Krishna College of Engineering and Technology",
+        "issue_date": "2024-10-30",
+        "expiry_date": null
+      },
+      "expected_expiry_status": "valid",
+      "expected_anomalies": [],
+      "is_noisy_ocr": false,
+      "date_format_used": "YYYY-MM-DD",
+      "has_qr": true
+    },
+    {
+      "file_name": "NBA_CERT_var1.pdf",
+      "document_type": "NBA_CERT",
+      "expected_fields": {
+        "certificate_number": "NBA-2026-1023",
+        "institute_name": "Sri Krishna College of Engineering and Technology",
+        "issue_date": "2026-05-03",
+        "expiry_date": "2029-05-02"
+      },
+      "expected_expiry_status": "valid",
+      "expected_anomalies": [],
+      "is_noisy_ocr": false,
+      "date_format_used": "DD-MM-YYYY",
+      "has_qr": true
+    },
+    {
+      "file_name": "NBA_CERT_var2.pdf",
+      "document_type": "NBA_CERT",
+      "expected_fields": {
+        "certificate_number": "NBA-2026-1024",
+        "institute_name": "Sri Krishna College of Engineering and Technology",
+        "issue_date": "2023-11-25",
+        "expiry_date": "2026-11-24"
+      },
+      "expected_expiry_status": "expiring soon",
+      "expected_anomalies": [],
+      "is_noisy_ocr": true,
+      "date_format_used": "DD/MM/YYYY",
+      "has_qr": false
+    },
+    {
+      "file_name": "NBA_CERT_var3.pdf",
+      "document_type": "NBA_CERT",
+      "expected_fields": {
+        "certificate_number": "NBA-2026-1025",
+        "institute_name": "Sri Krishna College of Engineering and Technology",
+        "issue_date": "2023-08-02",
+        "expiry_date": "2026-08-01"
+      },
+      "expected_expiry_status": "expired",
+      "expected_anomalies": [],
+      "is_noisy_ocr": false,
+      "date_format_used": "YYYY-MM-DD",
+      "has_qr": true
+    },
+    {
+      "file_name": "NBA_CERT_var4.pdf",
+      "document_type": "NBA_CERT",
+      "expected_fields": {
+        "certificate_number": "NBA-2026-1026",
+        "institute_name": "Sri Krishna College of Engineering and Technology",
+        "issue_date": "2026-08-31",
+        "expiry_date": "2029-08-30"
+      },
+      "expected_expiry_status": "valid",
+      "expected_anomalies": [],
+      "is_noisy_ocr": false,
+      "date_format_used": "TEXT",
+      "has_qr": false
+    },
+    {
+      "file_name": "NAAC_CERT_var1.pdf",
+      "document_type": "NAAC_CERT",
+      "expected_fields": {
+        "certificate_number": "NAA-2026-1027",
+        "institute_name": "Sri Krishna College of Engineering and Technology",
+        "issue_date": "2026-05-03",
+        "expiry_date": "2031-05-02"
+      },
+      "expected_expiry_status": "valid",
+      "expected_anomalies": [],
+      "is_noisy_ocr": false,
+      "date_format_used": "DD-MM-YYYY",
+      "has_qr": true
+    },
+    {
+      "file_name": "NAAC_CERT_var2.pdf",
+      "document_type": "NAAC_CERT",
+      "expected_fields": {
+        "certificate_number": "NAA-2026-1028",
+        "institute_name": "Sri Krishna College of Engineering and Technology",
+        "issue_date": "2021-11-25",
+        "expiry_date": "2026-11-24"
+      },
+      "expected_expiry_status": "expiring soon",
+      "expected_anomalies": [],
+      "is_noisy_ocr": true,
+      "date_format_used": "DD/MM/YYYY",
+      "has_qr": false
+    },
+    {
+      "file_name": "NAAC_CERT_var3.pdf",
+      "document_type": "NAAC_CERT",
+      "expected_fields": {
+        "certificate_number": "NAA-2026-1029",
+        "institute_name": "Sri Krishna College of Engineering and Technology",
+        "issue_date": "2021-08-02",
+        "expiry_date": "2026-08-01"
+      },
+      "expected_expiry_status": "expired",
+      "expected_anomalies": [],
+      "is_noisy_ocr": false,
+      "date_format_used": "YYYY-MM-DD",
+      "has_qr": true
+    },
+    {
+      "file_name": "AUDIT_ACCOUNTS_var1.pdf",
+      "document_type": "AUDIT_ACCOUNTS",
+      "expected_fields": {
+        "certificate_number": "AUD-2026-1030",
+        "institute_name": "Sri Krishna College of Engineering and Technology",
+        "issue_date": "2026-05-03",
+        "expiry_date": "2027-05-03"
+      },
+      "expected_expiry_status": "valid",
+      "expected_anomalies": [],
+      "is_noisy_ocr": false,
+      "date_format_used": "DD-MM-YYYY",
+      "has_qr": true
+    },
+    {
+      "file_name": "AUDIT_ACCOUNTS_var2.pdf",
+      "document_type": "AUDIT_ACCOUNTS",
+      "expected_fields": {
+        "certificate_number": "AUD-2026-1031",
+        "institute_name": "Sri Krishna College of Engineering and Technology",
+        "issue_date": "2025-11-24",
+        "expiry_date": "2026-11-24"
+      },
+      "expected_expiry_status": "expiring soon",
+      "expected_anomalies": [],
+      "is_noisy_ocr": false,
+      "date_format_used": "DD/MM/YYYY",
+      "has_qr": false
+    },
+    {
+      "file_name": "AUDIT_ACCOUNTS_var3.pdf",
+      "document_type": "AUDIT_ACCOUNTS",
+      "expected_fields": {
+        "certificate_number": "AUD-2026-1032",
+        "institute_name": "Sri Krishna College of Engineering and Technology",
+        "issue_date": "2025-08-01",
+        "expiry_date": "2026-08-01"
+      },
+      "expected_expiry_status": "expired",
+      "expected_anomalies": [],
+      "is_noisy_ocr": true,
+      "date_format_used": "YYYY-MM-DD",
+      "has_qr": true
+    },
+    {
+      "file_name": "FACULTY_LIST_var1.pdf",
+      "document_type": "FACULTY_LIST",
+      "expected_fields": {
+        "certificate_number": "FAC-2026-1033",
+        "institute_name": "Sri Krishna College of Engineering and Technology",
+        "issue_date": "2026-05-03",
+        "expiry_date": "2027-05-03"
+      },
+      "expected_expiry_status": "valid",
+      "expected_anomalies": [],
+      "is_noisy_ocr": false,
+      "date_format_used": "DD-MM-YYYY",
+      "has_qr": true
+    },
+    {
+      "file_name": "FACULTY_LIST_var2.pdf",
+      "document_type": "FACULTY_LIST",
+      "expected_fields": {
+        "certificate_number": "FAC-2026-1034",
+        "institute_name": "Sri Krishna College of Engineering and Technology",
+        "issue_date": "2025-11-24",
+        "expiry_date": "2026-11-24"
+      },
+      "expected_expiry_status": "expiring soon",
+      "expected_anomalies": [],
+      "is_noisy_ocr": false,
+      "date_format_used": "DD/MM/YYYY",
+      "has_qr": false
+    },
+    {
+      "file_name": "FACULTY_LIST_var3.pdf",
+      "document_type": "FACULTY_LIST",
+      "expected_fields": {
+        "certificate_number": "FAC-2026-1035",
+        "institute_name": "Sri Krishna College of Engineering and Technology",
+        "issue_date": "2025-08-01",
+        "expiry_date": "2026-08-01"
+      },
+      "expected_expiry_status": "expired",
+      "expected_anomalies": [],
+      "is_noisy_ocr": false,
+      "date_format_used": "YYYY-MM-DD",
+      "has_qr": true
+    },
+    {
+      "file_name": "EQUIP_LIST_var1.pdf",
+      "document_type": "EQUIP_LIST",
+      "expected_fields": {
+        "certificate_number": "EQU-2026-1036",
+        "institute_name": "Sri Krishna College of Engineering and Technology",
+        "issue_date": "2024-10-30",
+        "expiry_date": null
+      },
+      "expected_expiry_status": "valid",
+      "expected_anomalies": [],
+      "is_noisy_ocr": true,
+      "date_format_used": "DD-MM-YYYY",
+      "has_qr": true
+    },
+    {
+      "file_name": "EQUIP_LIST_var2.pdf",
+      "document_type": "EQUIP_LIST",
+      "expected_fields": {
+        "certificate_number": "EQU-2026-1037",
+        "institute_name": "Sri Krishna College of Engineering and Technology",
+        "issue_date": "2024-10-30",
+        "expiry_date": null
+      },
+      "expected_expiry_status": "valid",
+      "expected_anomalies": [],
+      "is_noisy_ocr": false,
+      "date_format_used": "DD/MM/YYYY",
+      "has_qr": false
+    },
+    {
+      "file_name": "EQUIP_LIST_var3.pdf",
+      "document_type": "EQUIP_LIST",
+      "expected_fields": {
+        "certificate_number": "EQU-2026-1038",
+        "institute_name": "Sri Krishna College of Engineering and Technology",
+        "issue_date": "2024-10-30",
+        "expiry_date": null
+      },
+      "expected_expiry_status": "valid",
+      "expected_anomalies": [],
+      "is_noisy_ocr": false,
+      "date_format_used": "YYYY-MM-DD",
+      "has_qr": true
+    },
+    {
+      "file_name": "COMP_CENTER_var1.pdf",
+      "document_type": "COMP_CENTER",
+      "expected_fields": {
+        "certificate_number": "COM-2026-1039",
+        "institute_name": "Sri Krishna College of Engineering and Technology",
+        "issue_date": "2024-10-30",
+        "expiry_date": null
+      },
+      "expected_expiry_status": "valid",
+      "expected_anomalies": [],
+      "is_noisy_ocr": false,
+      "date_format_used": "DD-MM-YYYY",
+      "has_qr": true
+    },
+    {
+      "file_name": "COMP_CENTER_var2.pdf",
+      "document_type": "COMP_CENTER",
+      "expected_fields": {
+        "certificate_number": "COM-2026-1040",
+        "institute_name": "Sri Krishna College of Engineering and Technology",
+        "issue_date": "2024-10-30",
+        "expiry_date": null
+      },
+      "expected_expiry_status": "valid",
+      "expected_anomalies": [],
+      "is_noisy_ocr": true,
+      "date_format_used": "DD/MM/YYYY",
+      "has_qr": false
+    },
+    {
+      "file_name": "COMP_CENTER_var3.pdf",
+      "document_type": "COMP_CENTER",
+      "expected_fields": {
+        "certificate_number": "COM-2026-1041",
+        "institute_name": "Sri Krishna College of Engineering and Technology",
+        "issue_date": "2024-10-30",
+        "expiry_date": null
+      },
+      "expected_expiry_status": "valid",
+      "expected_anomalies": [],
+      "is_noisy_ocr": false,
+      "date_format_used": "YYYY-MM-DD",
+      "has_qr": true
+    },
+    {
+      "file_name": "BARRIER_FREE_var1.pdf",
+      "document_type": "BARRIER_FREE",
+      "expected_fields": {
+        "certificate_number": "BAR-2026-1042",
+        "institute_name": "Sri Krishna College of Engineering and Technology",
+        "issue_date": "2026-05-03",
+        "expiry_date": "2029-05-02"
+      },
+      "expected_expiry_status": "valid",
+      "expected_anomalies": [],
+      "is_noisy_ocr": false,
+      "date_format_used": "DD-MM-YYYY",
+      "has_qr": true
+    },
+    {
+      "file_name": "BARRIER_FREE_var2.pdf",
+      "document_type": "BARRIER_FREE",
+      "expected_fields": {
+        "certificate_number": "BAR-2026-1043",
+        "institute_name": "Sri Krishna College of Engineering and Technology",
+        "issue_date": "2023-11-25",
+        "expiry_date": "2026-11-24"
+      },
+      "expected_expiry_status": "expiring soon",
+      "expected_anomalies": [],
+      "is_noisy_ocr": false,
+      "date_format_used": "DD/MM/YYYY",
+      "has_qr": false
+    },
+    {
+      "file_name": "BARRIER_FREE_var3.pdf",
+      "document_type": "BARRIER_FREE",
+      "expected_fields": {
+        "certificate_number": "BAR-2026-1044",
+        "institute_name": "Sri Krishna College of Engineering and Technology",
+        "issue_date": "2023-08-02",
+        "expiry_date": "2026-08-01"
+      },
+      "expected_expiry_status": "expired",
+      "expected_anomalies": [],
+      "is_noisy_ocr": true,
+      "date_format_used": "YYYY-MM-DD",
+      "has_qr": true
+    },
+    {
+      "file_name": "BANK_GUARANTEE_var1.pdf",
+      "document_type": "BANK_GUARANTEE",
+      "expected_fields": {
+        "certificate_number": "BAN-2026-1045",
+        "institute_name": "Sri Krishna College of Engineering and Technology",
+        "issue_date": "2026-05-03",
+        "expiry_date": "2031-05-02"
+      },
+      "expected_expiry_status": "valid",
+      "expected_anomalies": [],
+      "is_noisy_ocr": false,
+      "date_format_used": "DD-MM-YYYY",
+      "has_qr": true
+    },
+    {
+      "file_name": "BANK_GUARANTEE_var2.pdf",
+      "document_type": "BANK_GUARANTEE",
+      "expected_fields": {
+        "certificate_number": "BAN-2026-1046",
+        "institute_name": "Sri Krishna College of Engineering and Technology",
+        "issue_date": "2021-11-25",
+        "expiry_date": "2026-11-24"
+      },
+      "expected_expiry_status": "expiring soon",
+      "expected_anomalies": [],
+      "is_noisy_ocr": false,
+      "date_format_used": "DD/MM/YYYY",
+      "has_qr": false
+    },
+    {
+      "file_name": "BANK_GUARANTEE_var3.pdf",
+      "document_type": "BANK_GUARANTEE",
+      "expected_fields": {
+        "certificate_number": "BAN-2026-1047",
+        "institute_name": "Sri Krishna College of Engineering and Technology",
+        "issue_date": "2021-08-02",
+        "expiry_date": "2026-08-01"
+      },
+      "expected_expiry_status": "expired",
+      "expected_anomalies": [],
+      "is_noisy_ocr": false,
+      "date_format_used": "YYYY-MM-DD",
+      "has_qr": true
+    },
+    {
+      "file_name": "CYBER_AUDIT_var1.pdf",
+      "document_type": "CYBER_AUDIT",
+      "expected_fields": {
+        "certificate_number": "CYB-2026-1048",
+        "institute_name": "Sri Krishna College of Engineering and Technology",
+        "issue_date": "2026-05-03",
+        "expiry_date": "2027-05-03"
+      },
+      "expected_expiry_status": "valid",
+      "expected_anomalies": [],
+      "is_noisy_ocr": true,
+      "date_format_used": "DD-MM-YYYY",
+      "has_qr": true
+    },
+    {
+      "file_name": "CYBER_AUDIT_var2.pdf",
+      "document_type": "CYBER_AUDIT",
+      "expected_fields": {
+        "certificate_number": "CYB-2026-1049",
+        "institute_name": "Sri Krishna College of Engineering and Technology",
+        "issue_date": "2025-11-24",
+        "expiry_date": "2026-11-24"
+      },
+      "expected_expiry_status": "expiring soon",
+      "expected_anomalies": [],
+      "is_noisy_ocr": false,
+      "date_format_used": "DD/MM/YYYY",
+      "has_qr": false
+    },
+    {
+      "file_name": "CYBER_AUDIT_var3.pdf",
+      "document_type": "CYBER_AUDIT",
+      "expected_fields": {
+        "certificate_number": "CYB-2026-1050",
+        "institute_name": "Sri Krishna College of Engineering and Technology",
+        "issue_date": "2025-08-01",
+        "expiry_date": "2026-08-01"
+      },
+      "expected_expiry_status": "expired",
+      "expected_anomalies": [],
+      "is_noisy_ocr": false,
+      "date_format_used": "YYYY-MM-DD",
+      "has_qr": true
+    },
+    {
+      "file_name": "POLLUTION_NOC_var1.pdf",
+      "document_type": "POLLUTION_NOC",
+      "expected_fields": {
+        "certificate_number": "POL-2026-1051",
+        "institute_name": "Sri Krishna College of Engineering and Technology",
+        "issue_date": "2026-05-03",
+        "expiry_date": "2028-05-02"
+      },
+      "expected_expiry_status": "valid",
+      "expected_anomalies": [],
+      "is_noisy_ocr": false,
+      "date_format_used": "DD-MM-YYYY",
+      "has_qr": true
+    },
+    {
+      "file_name": "POLLUTION_NOC_var2.pdf",
+      "document_type": "POLLUTION_NOC",
+      "expected_fields": {
+        "certificate_number": "POL-2026-1052",
+        "institute_name": "Sri Krishna College of Engineering and Technology",
+        "issue_date": "2024-11-24",
+        "expiry_date": "2026-11-24"
+      },
+      "expected_expiry_status": "expiring soon",
+      "expected_anomalies": [],
+      "is_noisy_ocr": true,
+      "date_format_used": "DD/MM/YYYY",
+      "has_qr": false
+    },
+    {
+      "file_name": "POLLUTION_NOC_var3.pdf",
+      "document_type": "POLLUTION_NOC",
+      "expected_fields": {
+        "certificate_number": "POL-2026-1053",
+        "institute_name": "Sri Krishna College of Engineering and Technology",
+        "issue_date": "2024-08-01",
+        "expiry_date": "2026-08-01"
+      },
+      "expected_expiry_status": "expired",
+      "expected_anomalies": [],
+      "is_noisy_ocr": false,
+      "date_format_used": "YYYY-MM-DD",
+      "has_qr": true
+    },
+    {
+      "file_name": "MUNICIPAL_NOC_var1.pdf",
+      "document_type": "MUNICIPAL_NOC",
+      "expected_fields": {
+        "certificate_number": "MUN-2026-1054",
+        "institute_name": "Sri Krishna College of Engineering and Technology",
+        "issue_date": "2026-05-03",
+        "expiry_date": "2029-05-02"
+      },
+      "expected_expiry_status": "valid",
+      "expected_anomalies": [],
+      "is_noisy_ocr": false,
+      "date_format_used": "DD-MM-YYYY",
+      "has_qr": true
+    },
+    {
+      "file_name": "MUNICIPAL_NOC_var2.pdf",
+      "document_type": "MUNICIPAL_NOC",
+      "expected_fields": {
+        "certificate_number": "MUN-2026-1055",
+        "institute_name": "Sri Krishna College of Engineering and Technology",
+        "issue_date": "2023-11-25",
+        "expiry_date": "2026-11-24"
+      },
+      "expected_expiry_status": "expiring soon",
+      "expected_anomalies": [],
+      "is_noisy_ocr": false,
+      "date_format_used": "DD/MM/YYYY",
+      "has_qr": false
+    },
+    {
+      "file_name": "MUNICIPAL_NOC_var3.pdf",
+      "document_type": "MUNICIPAL_NOC",
+      "expected_fields": {
+        "certificate_number": "MUN-2026-1056",
+        "institute_name": "Sri Krishna College of Engineering and Technology",
+        "issue_date": "2023-08-02",
+        "expiry_date": "2026-08-01"
+      },
+      "expected_expiry_status": "expired",
+      "expected_anomalies": [],
+      "is_noisy_ocr": true,
+      "date_format_used": "YYYY-MM-DD",
+      "has_qr": true
+    },
+    {
+      "file_name": "NBA_ACCREDITATION_var1.pdf",
+      "document_type": "NBA_ACCREDITATION",
+      "expected_fields": {
+        "certificate_number": "NBA-2026-1057",
+        "institute_name": "Sri Krishna College of Engineering and Technology",
+        "issue_date": "2026-05-03",
+        "expiry_date": "2029-05-02"
+      },
+      "expected_expiry_status": "valid",
+      "expected_anomalies": [],
+      "is_noisy_ocr": false,
+      "date_format_used": "DD-MM-YYYY",
+      "has_qr": true
+    },
+    {
+      "file_name": "NBA_ACCREDITATION_var2.pdf",
+      "document_type": "NBA_ACCREDITATION",
+      "expected_fields": {
+        "certificate_number": "NBA-2026-1058",
+        "institute_name": "Sri Krishna College of Engineering and Technology",
+        "issue_date": "2023-11-25",
+        "expiry_date": "2026-11-24"
+      },
+      "expected_expiry_status": "expiring soon",
+      "expected_anomalies": [],
+      "is_noisy_ocr": false,
+      "date_format_used": "DD/MM/YYYY",
+      "has_qr": false
+    },
+    {
+      "file_name": "NBA_ACCREDITATION_var3.pdf",
+      "document_type": "NBA_ACCREDITATION",
+      "expected_fields": {
+        "certificate_number": "NBA-2026-1059",
+        "institute_name": "Sri Krishna College of Engineering and Technology",
+        "issue_date": "2023-08-02",
+        "expiry_date": "2026-08-01"
+      },
+      "expected_expiry_status": "expired",
+      "expected_anomalies": [],
+      "is_noisy_ocr": false,
+      "date_format_used": "YYYY-MM-DD",
+      "has_qr": true
+    },
+    {
+      "file_name": "FIRE_SAFETY_NOC_var1.pdf",
+      "document_type": "FIRE_SAFETY_NOC",
+      "expected_fields": {
+        "certificate_number": "FIR-2026-1060",
+        "institute_name": "Sri Krishna College of Engineering and Technology",
+        "issue_date": "2026-05-03",
+        "expiry_date": "2028-05-02"
+      },
+      "expected_expiry_status": "valid",
+      "expected_anomalies": [],
+      "is_noisy_ocr": true,
+      "date_format_used": "DD-MM-YYYY",
+      "has_qr": true
+    },
+    {
+      "file_name": "FIRE_SAFETY_NOC_var2.pdf",
+      "document_type": "FIRE_SAFETY_NOC",
+      "expected_fields": {
+        "certificate_number": "FIR-2026-1061",
+        "institute_name": "Sri Krishna College of Engineering and Technology",
+        "issue_date": "2024-11-24",
+        "expiry_date": "2026-11-24"
+      },
+      "expected_expiry_status": "expiring soon",
+      "expected_anomalies": [],
+      "is_noisy_ocr": false,
+      "date_format_used": "DD/MM/YYYY",
+      "has_qr": false
+    },
+    {
+      "file_name": "FIRE_SAFETY_NOC_var3.pdf",
+      "document_type": "FIRE_SAFETY_NOC",
+      "expected_fields": {
+        "certificate_number": "FIR-2026-1062",
+        "institute_name": "Sri Krishna College of Engineering and Technology",
+        "issue_date": "2024-08-01",
+        "expiry_date": "2026-08-01"
+      },
+      "expected_expiry_status": "expired",
+      "expected_anomalies": [],
+      "is_noisy_ocr": false,
+      "date_format_used": "YYYY-MM-DD",
+      "has_qr": true
+    },
+    {
+      "file_name": "FIRE_NOC_var_duplicate.pdf",
+      "document_type": "FIRE_NOC",
+      "expected_fields": {
+        "certificate_number": "FIR-2026-1001",
+        "institute_name": "Sri Krishna College of Engineering and Technology",
+        "issue_date": "2026-05-03",
+        "expiry_date": "2028-05-02"
+      },
+      "expected_expiry_status": "valid",
+      "expected_anomalies": [
+        "duplicate"
+      ],
+      "is_noisy_ocr": false,
+      "date_format_used": "DD-MM-YYYY",
+      "has_qr": true
+    }
+  ]
+}

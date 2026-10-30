@@ -12,6 +12,8 @@ import {
   RefreshCw,
   Layers,
   Image,
+  ThumbsUp,
+  ThumbsDown,
 } from 'lucide-react';
 import { adminApi, AdminAnomalyFlagOut } from '../../api/admin';
 import { StatusPill } from '../../components/StatusPill';
@@ -65,9 +67,38 @@ export const AdminAnomalyReviewPage: React.FC = () => {
     fetchData();
   };
 
+  // Feedback State
+  const [, setFeedbackGiven] = useState<boolean | null>(null);
+  const [feedbackNote, setFeedbackNote] = useState('');
+  const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false);
+  const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
+
   const handleOpenDetail = (flag: AdminAnomalyFlagOut) => {
     setSelectedFlag(flag);
+    setFeedbackGiven(null);
+    setFeedbackNote('');
+    setFeedbackMessage(null);
     setIsDrawerOpen(true);
+  };
+
+  const handleFeedback = async (isCorrect: boolean) => {
+    if (!selectedFlag) return;
+    setIsSubmittingFeedback(true);
+    try {
+      await adminApi.submitAiFeedback({
+        target_type: 'ANOMALY',
+        target_id: selectedFlag.id,
+        document_id: selectedFlag.document_id,
+        is_correct: isCorrect,
+        correction_notes: feedbackNote.trim() || undefined,
+      });
+      setFeedbackGiven(isCorrect);
+      setFeedbackMessage(isCorrect ? 'Detector result marked as valid alert' : 'Detector result marked as false alarm');
+    } catch (err) {
+      console.error('Failed to submit AI feedback:', err);
+    } finally {
+      setIsSubmittingFeedback(false);
+    }
   };
 
   const openDecisionModal = (decision: 'Verified – no concern' | 'Needs institute clarification' | 'Escalate', flag?: AdminAnomalyFlagOut) => {
@@ -464,6 +495,52 @@ export const AdminAnomalyReviewPage: React.FC = () => {
                 </span>
               </div>
             )}
+
+            {/* Human Feedback Loop for AI Governance */}
+            <div className="pt-4 border-t border-slate-200">
+              <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider block mb-1">
+                Detector Accuracy Feedback
+              </span>
+              <p className="text-[11px] text-slate-500 mb-2.5">
+                Was this potential anomaly flag valid, or was it a benign false alarm?
+              </p>
+              {feedbackMessage ? (
+                <div className="p-2.5 bg-emerald-50 text-emerald-800 rounded-lg text-xs font-semibold flex items-center gap-1.5">
+                  <CheckCircle2 size={14} className="text-emerald-600" />
+                  <span>{feedbackMessage}</span>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <input
+                    type="text"
+                    placeholder="Optional feedback note (e.g. scanned watermark caused visual noise)..."
+                    value={feedbackNote}
+                    onChange={(e) => setFeedbackNote(e.target.value)}
+                    className="w-full text-xs p-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-1 focus:ring-[#0B3C9D]"
+                  />
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={isSubmittingFeedback}
+                      onClick={() => handleFeedback(true)}
+                      className="flex-1 py-1.5 px-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 border border-emerald-200 transition-colors disabled:opacity-50"
+                    >
+                      <ThumbsUp size={13} />
+                      <span>Valid Flag</span>
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isSubmittingFeedback}
+                      onClick={() => handleFeedback(false)}
+                      className="flex-1 py-1.5 px-3 bg-red-50 hover:bg-red-100 text-red-800 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 border border-red-200 transition-colors disabled:opacity-50"
+                    >
+                      <ThumbsDown size={13} />
+                      <span>False Alarm</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
 
             {/* Scrutiny Action Buttons in Drawer */}
             <div className="pt-4 border-t border-slate-200 space-y-2">

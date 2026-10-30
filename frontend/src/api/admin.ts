@@ -468,6 +468,64 @@ export const adminApi = {
     link.parentNode?.removeChild(link);
     window.URL.revokeObjectURL(url);
   },
+
+  // 11. AI Model Evaluation & Human Feedback (Stage 9)
+  triggerEvaluationRun: async (subsetLimit?: number): Promise<EvaluationRunData> => {
+    const res = await apiClient.post<EvaluationRunData>('/api/v1/admin/evaluation/run', null, {
+      params: subsetLimit ? { subset_limit: subsetLimit } : {},
+    });
+    return res.data;
+  },
+  listEvaluationRuns: async (limit: number = 50): Promise<EvaluationRunData[]> => {
+    const res = await apiClient.get<EvaluationRunData[]>('/api/v1/admin/evaluation/runs', { params: { limit } });
+    return res.data;
+  },
+  getEvaluationRun: async (runId: number): Promise<EvaluationRunData> => {
+    const res = await apiClient.get<EvaluationRunData>(`/api/v1/admin/evaluation/runs/${runId}`);
+    return res.data;
+  },
+  downloadEvaluationCsv: async (runId: number) => {
+    const response = await apiClient.get(`/api/v1/admin/evaluation/runs/${runId}/export/csv`, {
+      responseType: 'blob',
+    });
+    const blob = new Blob([response.data], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `evaluation_run_${runId}_metrics.csv`);
+    document.body.appendChild(link);
+    link.click();
+    link.parentNode?.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  },
+  downloadEvaluationPdf: async (runId: number) => {
+    const response = await apiClient.get(`/api/v1/admin/evaluation/runs/${runId}/export/pdf`, {
+      responseType: 'blob',
+    });
+    const blob = new Blob([response.data], { type: 'application/pdf' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `evaluation_run_${runId}_summary.pdf`);
+    document.body.appendChild(link);
+    link.click();
+    link.parentNode?.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  },
+  submitAiFeedback: async (payload: {
+    target_type: 'VERIFICATION' | 'ANOMALY' | 'CLASSIFICATION' | 'EXTRACTION';
+    target_id: number;
+    document_id?: number;
+    is_correct: boolean;
+    correction_notes?: string;
+  }) => {
+    const res = await apiClient.post('/api/v1/admin/feedback', payload);
+    return res.data;
+  },
+  getFeedbackStats: async (): Promise<FeedbackStatsData> => {
+    const res = await apiClient.get<FeedbackStatsData>('/api/v1/admin/evaluation/feedback-stats');
+    return res.data;
+  },
 };
 
 // -------------------------------------------------------------
@@ -592,4 +650,67 @@ export interface AdminReportItem {
   language?: string;
   generated_by?: string;
 }
+
+export interface EvaluationRunData {
+  id: number;
+  dataset_version: string;
+  status: string;
+  overall_accuracy: number;
+  total_samples: number;
+  passed_samples: number;
+  metrics_json: {
+    overall_accuracy: number;
+    ocr_success_rate: number;
+    avg_processing_time_sec: number;
+    total_samples: number;
+    classification?: {
+      accuracy: number;
+      macro_precision: number;
+      macro_recall: number;
+      macro_f1: number;
+      per_type: Record<string, { precision: number; recall: number; f1: number; support: number }>;
+      confusion_matrix: {
+        labels: string[];
+        matrix: number[][];
+      };
+    };
+    field_extraction?: {
+      overall_exact_match: number;
+      overall_normalized_match: number;
+      per_field: Record<string, { exact_match_pct: number; normalized_match_pct: number; total_evaluated: number }>;
+    };
+    expiry_status?: {
+      accuracy: number;
+      per_status: Record<string, { precision: number; recall: number; f1: number; support: number }>;
+    };
+    anomaly_detectors?: {
+      overall_fpr: number;
+      per_detector: Record<string, { precision: number; recall: number; fpr: number; tp: number; fp: number; fn: number; tn: number }>;
+    };
+    explainer_grounding?: {
+      grounding_rate_pct: number;
+      statements_checked: number;
+      statements_grounded: number;
+      unsupported_claims: string[];
+    };
+  };
+  failed_cases_json: Array<{
+    filename: string;
+    doc_type: string;
+    failures: string[];
+    details: Record<string, any>;
+  }>;
+  git_commit?: string;
+  started_at: string;
+  finished_at?: string;
+  duration_seconds: number;
+}
+
+export interface FeedbackStatsData {
+  total_feedback: number;
+  correct_count: number;
+  incorrect_count: number;
+  agreement_rate_pct: number;
+}
+
 
