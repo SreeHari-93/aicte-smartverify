@@ -60,6 +60,8 @@ export const UploadPage: React.FC = () => {
   const [isVerifying, setIsVerifying] = useState(false);
   const [verifyNotice, setVerifyNotice] = useState<string | null>(null);
   const [docAnomalies, setDocAnomalies] = useState<InstituteAnomalyFlag[]>([]);
+  const [retryingDocId, setRetryingDocId] = useState<number | null>(null);
+  const [isCleaning, setIsCleaning] = useState(false);
 
   const formatVerificationStatus = (raw?: string): string => {
     if (!raw) return 'Pending';
@@ -120,6 +122,82 @@ export const UploadPage: React.FC = () => {
   useEffect(() => {
     fetchData();
   }, [selectedCategory]);
+
+  const hasActiveProcessing = documents.some(
+    (d) =>
+      d.ocr_status === 'PROCESSING' ||
+      d.ocr_status === 'PENDING' ||
+      d.status === 'Processing' ||
+      d.status === 'Uploaded' ||
+      d.verification_status === 'VERIFICATION_PENDING'
+  );
+
+  useEffect(() => {
+    if (!hasActiveProcessing) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const [docsRes, chk] = await Promise.all([
+          instituteApi.getDocuments(),
+          instituteApi.getChecklist(selectedCategory, selectedAppId || undefined),
+        ]);
+        setDocuments(docsRes);
+        if (chk && chk.items) {
+          setChecklistItems(chk.items);
+          setChecklistStats({
+            total: chk.total_required,
+            uploaded: chk.uploaded_count,
+            missing: chk.missing_count,
+          });
+        }
+      } catch (err) {
+        console.error('Auto-refresh poll error:', err);
+      }
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [hasActiveProcessing, selectedCategory, selectedAppId]);
+
+  const handleRetry = async (docId: number) => {
+    setRetryingDocId(docId);
+    try {
+      await instituteApi.retryDocument(docId);
+      setDocuments((prev) =>
+        prev.map((d) => (d.id === docId ? { ...d, ocr_status: 'PENDING', status: 'Processing' } : d))
+      );
+      setUploadSuccess(`Reprocessing queued for document #${docId}.`);
+    } catch (err: any) {
+      alert(err.response?.data?.detail || 'Failed to retry document processing.');
+    } finally {
+      setRetryingDocId(null);
+    }
+  };
+
+  const handleCleanupPlaceholders = async () => {
+    if (!confirm('Are you sure you want to delete all 46-byte demo placeholder documents?')) return;
+    setIsCleaning(true);
+    try {
+      const res = await instituteApi.cleanupPlaceholders();
+      setUploadSuccess(res.message || 'Demo placeholder documents cleaned successfully.');
+      const [docsRes, chk] = await Promise.all([
+        instituteApi.getDocuments(),
+        instituteApi.getChecklist(selectedCategory, selectedAppId || undefined),
+      ]);
+      setDocuments(docsRes);
+      if (chk && chk.items) {
+        setChecklistItems(chk.items);
+        setChecklistStats({
+          total: chk.total_required,
+          uploaded: chk.uploaded_count,
+          missing: chk.missing_count,
+        });
+      }
+    } catch (err: any) {
+      alert(err.response?.data?.detail || 'Failed to clean placeholder documents.');
+    } finally {
+      setIsCleaning(false);
+    }
+  };
 
   const handleFileUpload = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -562,9 +640,22 @@ export const UploadPage: React.FC = () => {
 
       {/* List of Uploaded Documents */}
       <div className="bg-white rounded-[12px] p-6 shadow-[0_6px_18px_rgba(0,0,0,0.18)] border border-slate-100">
-        <h3 className="text-base font-bold text-[#0B3C9D] pb-4 border-b border-slate-100 tracking-tight">
-          Uploaded Documents Archive ({documents.length})
-        </h3>
+        <div className="flex items-center justify-between pb-4 border-b border-slate-100 flex-wrap gap-2">
+          <h3 className="text-base font-bold text-[#0B3C9D] tracking-tight">
+            Uploaded Documents Archive ({documents.length})
+          </h3>
+          {documents.some((d) => d.file_size === 46) && (
+            <button
+              onClick={handleCleanupPlaceholders}
+              disabled={isCleaning}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-50 text-[#C62828] hover:bg-red-100 rounded-[8px] text-xs font-semibold border border-red-200 transition-colors disabled:opacity-50"
+              title="Delete 46-byte demo placeholder documents"
+            >
+              <Trash2 size={13} />
+              <span>{isCleaning ? 'Cleaning...' : 'Clean Demo Placeholders'}</span>
+            </button>
+          )}
+        </div>
 
         <div className="overflow-x-auto mt-4">
           <table className="w-full text-left border-collapse text-xs">
@@ -597,16 +688,23 @@ export const UploadPage: React.FC = () => {
                 </tr>
               ) : (
                 documents.map((doc) => {
+                  const isFailed =
+                    doc.ocr_status === 'FAILED' ||
+                    doc.status === 'Failed – retry available' ||
+                    (doc.status && doc.status.toLowerCase().includes('failed'));
+
                   const ocrPillStatus =
                     doc.ocr_status === 'PROCESSING'
                       ? 'Processing'
+                      : isFailed
+                      ? 'Failed – retry available'
                       : doc.ocr_status === 'DONE'
                       ? doc.status === 'Needs Attention'
                         ? 'Needs Attention'
                         : 'Done'
-                      : doc.ocr_status === 'FAILED'
-                      ? 'Needs Attention'
                       : doc.status || 'Uploaded';
+
+                  const isNotCompleted = doc.ocr_status !== 'DONE' || isFailed;
 
                   return (
                     <tr key={doc.id} className="hover:bg-slate-50/80 transition-colors">
@@ -635,6 +733,18 @@ export const UploadPage: React.FC = () => {
                       </td>
                       <td className="py-3.5 px-4">
                         <div className="flex items-center justify-center gap-1.5">
+                          {/* Retry Button if document is not Completed */}
+                          {isNotCompleted && (
+                            <button
+                              onClick={() => handleRetry(doc.id)}
+                              disabled={retryingDocId === doc.id || doc.ocr_status === 'PROCESSING'}
+                              title="Retry Processing (OCR, Extraction, Verification)"
+                              className="p-1.5 bg-amber-50 text-[#F58220] hover:bg-amber-100 rounded-[6px] transition-colors disabled:opacity-50"
+                            >
+                              <RefreshCw size={13} className={retryingDocId === doc.id ? 'animate-spin' : ''} />
+                            </button>
+                          )}
+
                           {/* View Extracted Data Drawer */}
                           <button
                             onClick={() => handleOpenDrawer(doc)}

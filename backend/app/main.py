@@ -1,3 +1,4 @@
+import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,6 +12,13 @@ from backend.app.api.v1.institute import router as institute_router
 from backend.app.api.v1.admin import router as admin_router
 from backend.app.api.v1.mock_authorities import router as mock_authorities_router
 from backend.app.services.notification_service import check_and_create_certificate_notifications
+from backend.app.services.document_pipeline.recovery import recover_stuck_documents
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
+logger = logging.getLogger("aicte_smartverify")
 
 # Initialize database schema
 Base.metadata.create_all(bind=engine)
@@ -24,13 +32,22 @@ def run_scheduled_expiry_check():
     try:
         check_and_create_certificate_notifications(db)
     except Exception as e:
-        print(f"[SCHEDULER ERROR] Expiry check failed: {e}")
+        logger.error(f"[SCHEDULER ERROR] Expiry check failed: {e}")
     finally:
         db.close()
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Recover any stuck documents from previous runs
+    db = SessionLocal()
+    try:
+        recover_stuck_documents(db, max_age_minutes=2)
+    except Exception as e:
+        logger.error(f"[STARTUP ERROR] Stuck document recovery failed: {e}", exc_info=True)
+    finally:
+        db.close()
+
     # Start background scheduler
     scheduler.add_job(run_scheduled_expiry_check, 'interval', hours=24, id="daily_cert_check", replace_existing=True)
     scheduler.start()

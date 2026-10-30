@@ -38,8 +38,10 @@ class AnomalyService:
         data = dict(doc.extracted_data or {})
         if doc.extracted_fields:
             for ef in doc.extracted_fields:
-                if ef.field_name and ef.field_value is not None:
-                    data[ef.field_name] = ef.field_value
+                k = getattr(ef, "key", None) or getattr(ef, "field_name", None)
+                v = getattr(ef, "value", None) if getattr(ef, "value", None) is not None else getattr(ef, "field_value", None)
+                if k and v is not None:
+                    data[k] = v
         return data
 
     @classmethod

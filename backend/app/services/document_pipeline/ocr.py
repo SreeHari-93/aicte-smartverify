@@ -1,11 +1,14 @@
 import io
 import os
 import time
+import logging
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional, Tuple
 from pydantic import BaseModel, Field
 from PIL import Image
+
+logger = logging.getLogger("document_pipeline")
 
 import pymupdf as fitz
 from rapidocr_onnxruntime import RapidOCR
@@ -420,15 +423,21 @@ class OCRService:
     def run_document_ocr_task(cls, document_id: int):
         """
         Background task to run OCR processing asynchronously.
-        Never crashes the request thread and logs status transitions to AuditLog.
+        Executes: OCR -> Classification -> Extraction -> Verification -> Anomaly Scan.
+        Never crashes the request thread and logs status transitions to AuditLog and logger.
         """
         db, should_close = cls._get_active_session()
+        start_time = time.time()
         try:
             doc = db.query(Document).filter(Document.id == document_id).first()
             if not doc:
+                logger.warning(f"[JOB ABORTED] Document #{document_id} not found in database.")
                 return
 
+            logger.info(f"[JOB START] Document #{doc.id} ('{doc.original_filename}') - beginning processing pipeline...")
+
             doc.ocr_status = "PROCESSING"
+            doc.status = "Processing"
             db.commit()
 
             AuditService.log_event(
@@ -474,11 +483,30 @@ class OCRService:
             updated_ocr_data["ocr_confidence"] = ocr_result.overall_confidence
             doc.extracted_data = updated_ocr_data
 
+            if ocr_result.status == "FAILED":
+                doc.status = "Failed – retry available"
+                db.commit()
+                logger.error(f"[JOB OCR FAILED] Document #{doc.id}: {ocr_result.error_message}")
+                AuditService.log_event(
+                    db=db,
+                    action="DOCUMENT_OCR_FAILED",
+                    user_id=None,
+                    role="SYSTEM",
+                    reason=f"OCR pipeline failed for document ID {doc.id}: {ocr_result.error_message}",
+                    details={"document_id": doc.id, "error": ocr_result.error_message},
+                )
+                return
+
             db.commit()
+            logger.info(
+                f"[JOB OCR DONE] Document #{doc.id}: engine={ocr_result.engine}, "
+                f"pages={ocr_result.page_count}, confidence={ocr_result.overall_confidence:.2f}, "
+                f"text_length={len(ocr_result.full_text or '')}"
+            )
 
             AuditService.log_event(
                 db=db,
-                action="DOCUMENT_OCR_COMPLETED" if ocr_result.status in ["DONE", "MANUAL"] else "DOCUMENT_OCR_FAILED",
+                action="DOCUMENT_OCR_COMPLETED",
                 user_id=None,
                 role="SYSTEM",
                 reason=f"OCR pipeline finished with status '{ocr_result.status}' for document ID {doc.id}",
@@ -495,153 +523,197 @@ class OCRService:
             # ------------------------------------------------------------------
             # Run Classification and Extraction automatically after OCR
             # ------------------------------------------------------------------
-            if ocr_result.status in ["DONE", "MANUAL"] and ocr_result.full_text:
+            all_dts = db.query(DocumentType).filter(DocumentType.is_active == True).all()
+            cls_res = None
+            try:
+                from backend.app.services.document_pipeline.classifier import DocumentClassifier
+
+                cls_res = DocumentClassifier.classify(
+                    ocr_text=ocr_result.full_text or "",
+                    document_types=all_dts,
+                    uploaded_code=doc.document_type_code,
+                )
+
+                classification = (
+                    db.query(DocumentClassification)
+                    .filter(DocumentClassification.document_id == doc.id)
+                    .first()
+                )
+                if not classification:
+                    classification = DocumentClassification(document_id=doc.id)
+                    db.add(classification)
+
+                classification.predicted_type = cls_res.predicted_type
+                classification.score = cls_res.score
+                classification.candidates_json = [c.model_dump() for c in cls_res.candidates]
+                classification.mismatch_flag = cls_res.mismatch_flag
+                classification.warning_message = cls_res.warning_message
+                db.commit()
+
+                logger.info(
+                    f"[JOB CLASSIFIED] Document #{doc.id}: predicted_type='{cls_res.predicted_type}' "
+                    f"(score={cls_res.score:.2f}, mismatch={cls_res.mismatch_flag})"
+                )
+
+                AuditService.log_event(
+                    db=db,
+                    action="DOCUMENT_CLASSIFIED",
+                    user_id=None,
+                    role="SYSTEM",
+                    reason=f"Document ID {doc.id} classified as '{cls_res.predicted_type}' (Score: {cls_res.score}, Mismatch: {cls_res.mismatch_flag})",
+                    details={
+                        "document_id": doc.id,
+                        "predicted_type": cls_res.predicted_type,
+                        "score": cls_res.score,
+                        "mismatch_flag": cls_res.mismatch_flag,
+                        "warning_message": cls_res.warning_message,
+                    },
+                )
+            except Exception as cls_err:
+                logger.warning(f"[JOB CLASSIFICATION ERROR] Document #{doc.id}: {cls_err}")
+
+            # Determine DocumentType for extraction schema
+            target_dt = None
+            if doc.document_type:
+                target_dt = doc.document_type
+            elif doc.document_type_code:
+                target_dt = next((dt for dt in all_dts if dt.code.upper() == doc.document_type_code.upper()), None)
+            if not target_dt and cls_res:
+                target_dt = next((dt for dt in all_dts if dt.code.upper() == cls_res.predicted_type.upper()), None)
+
+            extracted_fields_count = 0
+            has_review_needed = False
+            if target_dt:
                 try:
-                    from backend.app.services.document_pipeline.classifier import DocumentClassifier
                     from backend.app.services.document_pipeline.extractor import DocumentExtractor
 
-                    all_dts = db.query(DocumentType).filter(DocumentType.is_active == True).all()
-                    cls_res = DocumentClassifier.classify(
-                        ocr_text=ocr_result.full_text,
-                        document_types=all_dts,
-                        uploaded_code=doc.document_type_code,
+                    pages_info = [
+                        {"page_no": p.page_no, "words": [w.model_dump() for w in p.words]}
+                        for p in ocr_result.pages
+                    ]
+                    ext_res = DocumentExtractor.extract_fields(
+                        ocr_text=ocr_result.full_text or "",
+                        doc_type=target_dt,
+                        pages_info=pages_info,
+                        document_id=doc.id,
                     )
 
-                    classification = (
-                        db.query(DocumentClassification)
-                        .filter(DocumentClassification.document_id == doc.id)
-                        .first()
-                    )
-                    if not classification:
-                        classification = DocumentClassification(document_id=doc.id)
-                        db.add(classification)
+                    # Delete unverified fields for idempotency
+                    db.query(ExtractedField).filter(
+                        ExtractedField.document_id == doc.id,
+                        ExtractedField.verified_by_user == False,
+                    ).delete()
 
-                    classification.predicted_type = cls_res.predicted_type
-                    classification.score = cls_res.score
-                    classification.candidates_json = [c.model_dump() for c in cls_res.candidates]
-                    classification.mismatch_flag = cls_res.mismatch_flag
-                    classification.warning_message = cls_res.warning_message
-                    db.commit()
-
-                    AuditService.log_event(
-                        db=db,
-                        action="DOCUMENT_CLASSIFIED",
-                        user_id=None,
-                        role="SYSTEM",
-                        reason=f"Document ID {doc.id} classified as '{cls_res.predicted_type}' (Score: {cls_res.score}, Mismatch: {cls_res.mismatch_flag})",
-                        details={
-                            "document_id": doc.id,
-                            "predicted_type": cls_res.predicted_type,
-                            "score": cls_res.score,
-                            "mismatch_flag": cls_res.mismatch_flag,
-                            "warning_message": cls_res.warning_message,
-                        },
-                    )
-
-                    # Determine DocumentType for extraction schema
-                    target_dt = None
-                    if doc.document_type:
-                        target_dt = doc.document_type
-                    elif doc.document_type_code:
-                        target_dt = next((dt for dt in all_dts if dt.code.upper() == doc.document_type_code.upper()), None)
-                    if not target_dt:
-                        target_dt = next((dt for dt in all_dts if dt.code.upper() == cls_res.predicted_type.upper()), None)
-
-                    if target_dt:
-                        pages_info = [
-                            {"page_no": p.page_no, "words": [w.model_dump() for w in p.words]}
-                            for p in ocr_result.pages
-                        ]
-                        ext_res = DocumentExtractor.extract_fields(
-                            ocr_text=ocr_result.full_text,
-                            doc_type=target_dt,
-                            pages_info=pages_info,
-                            document_id=doc.id,
+                    for f in ext_res.fields:
+                        existing = (
+                            db.query(ExtractedField)
+                            .filter(
+                                ExtractedField.document_id == doc.id,
+                                ExtractedField.key == f.key,
+                            )
+                            .first()
                         )
+                        if existing and existing.verified_by_user:
+                            continue
 
-                        # Delete unverified fields for idempotency
-                        db.query(ExtractedField).filter(
-                            ExtractedField.document_id == doc.id,
-                            ExtractedField.verified_by_user == False,
-                        ).delete()
+                        ef = ExtractedField(
+                            document_id=doc.id,
+                            key=f.key,
+                            value=f.value,
+                            normalized_value=f.normalized_value,
+                            confidence=f.confidence,
+                            page_no=f.page_no,
+                            bbox_json=f.bbox,
+                            source=f.source,
+                            needs_review=f.needs_review,
+                            verified_by_user=False,
+                        )
+                        db.add(ef)
 
-                        for f in ext_res.fields:
-                            existing = (
-                                db.query(ExtractedField)
-                                .filter(
-                                    ExtractedField.document_id == doc.id,
-                                    ExtractedField.key == f.key,
-                                )
-                                .first()
-                            )
-                            if existing and existing.verified_by_user:
-                                continue
-
-                            ef = ExtractedField(
-                                document_id=doc.id,
-                                key=f.key,
-                                value=f.value,
-                                normalized_value=f.normalized_value,
-                                confidence=f.confidence,
-                                page_no=f.page_no,
-                                bbox_json=f.bbox,
-                                source=f.source,
-                                needs_review=f.needs_review,
-                                verified_by_user=False,
-                            )
-                            db.add(ef)
-
-                        updated_ext_data = dict(doc.extracted_data or {})
-                        updated_ext_data["expiry_date"] = ext_res.expiry_date
-                        updated_ext_data["issue_date"] = ext_res.issue_date
-                        updated_ext_data["is_expired"] = ext_res.is_expired
-                        updated_ext_data["days_remaining"] = ext_res.days_remaining
+                    updated_ext_data = dict(doc.extracted_data or {})
+                    updated_ext_data["expiry_date"] = ext_res.expiry_date
+                    updated_ext_data["issue_date"] = ext_res.issue_date
+                    updated_ext_data["is_expired"] = ext_res.is_expired
+                    updated_ext_data["days_remaining"] = ext_res.days_remaining
+                    if cls_res:
                         updated_ext_data["classification"] = {
                             "predicted_type": cls_res.predicted_type,
                             "score": cls_res.score,
                             "mismatch_flag": cls_res.mismatch_flag,
                             "warning_message": cls_res.warning_message,
                         }
-                        doc.extracted_data = updated_ext_data
+                    doc.extracted_data = updated_ext_data
 
-                        if cls_res.mismatch_flag or any(f.needs_review for f in ext_res.fields):
-                            doc.status = "Needs Attention"
-                        else:
-                            doc.status = "Verified"
+                    extracted_fields_count = len(ext_res.fields)
+                    has_review_needed = any(f.needs_review for f in ext_res.fields)
 
-                        db.commit()
+                    AuditService.log_event(
+                        db=db,
+                        action="DOCUMENT_EXTRACTED",
+                        user_id=None,
+                        role="SYSTEM",
+                        reason=f"Extracted {len(ext_res.fields)} fields for document ID {doc.id} (Expiry: {ext_res.expiry_date})",
+                        details={
+                            "document_id": doc.id,
+                            "fields_count": len(ext_res.fields),
+                            "expiry_date": ext_res.expiry_date,
+                            "is_expired": ext_res.is_expired,
+                            "days_remaining": ext_res.days_remaining,
+                        },
+                    )
+                    logger.info(f"[JOB EXTRACTION DONE] Document #{doc.id}: extracted {extracted_fields_count} fields.")
+                except Exception as ext_err:
+                    logger.warning(f"[JOB EXTRACTION ERROR] Document #{doc.id}: {ext_err}")
 
-                        AuditService.log_event(
-                            db=db,
-                            action="DOCUMENT_EXTRACTED",
-                            user_id=None,
-                            role="SYSTEM",
-                            reason=f"Extracted {len(ext_res.fields)} fields for document ID {doc.id} (Expiry: {ext_res.expiry_date})",
-                            details={
-                                "document_id": doc.id,
-                                "fields_count": len(ext_res.fields),
-                                "expiry_date": ext_res.expiry_date,
-                                "is_expired": ext_res.is_expired,
-                                "days_remaining": ext_res.days_remaining,
-                            },
-                        )
+            # Update overall document status
+            mismatch = cls_res.mismatch_flag if cls_res else False
+            if mismatch or has_review_needed:
+                doc.status = "Needs Attention"
+            else:
+                doc.status = "Verified"
+            db.commit()
 
-                        # Run statutory verification automatically after extraction
-                        try:
-                            from backend.app.services.verification import VerificationService
-                            VerificationService.verify_document(db=db, document_id=doc.id, triggered_by=None)
-                        except Exception:
-                            pass
-                except Exception as sub_err:
-                    pass
+            # ------------------------------------------------------------------
+            # Statutory Verification is ALWAYS triggered when OCR/Extraction finish
+            # ------------------------------------------------------------------
+            try:
+                from backend.app.services.verification import VerificationService
+                logger.info(f"[JOB VERIFICATION START] Document #{doc.id}: running statutory verification...")
+                ver_res = VerificationService.verify_document(db=db, document_id=doc.id, triggered_by=None)
+                logger.info(
+                    f"[JOB VERIFICATION FINISHED] Document #{doc.id}: "
+                    f"status='{ver_res.status}', source='{ver_res.source_name}'"
+                )
+            except Exception as ver_err:
+                logger.error(f"[JOB VERIFICATION ERROR] Document #{doc.id}: {ver_err}", exc_info=True)
+
+            # ------------------------------------------------------------------
+            # Anomaly Screening is triggered automatically
+            # ------------------------------------------------------------------
+            try:
+                from backend.app.services.anomaly import AnomalyService
+                logger.info(f"[JOB ANOMALY SCAN START] Document #{doc.id}: running preliminary anomaly detection...")
+                _, flags = AnomalyService.scan_document(db=db, document_id=doc.id)
+                logger.info(f"[JOB ANOMALY SCAN FINISHED] Document #{doc.id}: {len(flags)} preliminary indicators recorded.")
+            except Exception as anom_err:
+                logger.warning(f"[JOB ANOMALY SCAN NOTE] Document #{doc.id}: {anom_err}")
+
+            elapsed = time.time() - start_time
+            logger.info(
+                f"[JOB FINISHED] Document #{doc.id} ('{doc.original_filename}') completed in {elapsed:.2f}s "
+                f"with status='{doc.status}', ocr_status='{doc.ocr_status}', "
+                f"verification_status='{doc.verification_status}'"
+            )
 
         except Exception as e:
+            logger.error(f"[JOB CRITICAL ERROR] Document #{document_id} pipeline crashed: {str(e)}", exc_info=True)
             db.rollback()
             try:
                 doc = db.query(Document).filter(Document.id == document_id).first()
                 if doc:
                     doc.ocr_status = "FAILED"
-                    doc.error_message = str(e)
+                    doc.status = "Failed – retry available"
+                    doc.error_message = f"Processing error: {str(e)}"
                     doc.processed_at = datetime.now(timezone.utc)
                     db.commit()
 

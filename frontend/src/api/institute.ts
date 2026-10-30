@@ -465,6 +465,18 @@ export const instituteApi = {
     return res.data;
   },
 
+  retryDocument: async (id: number) => {
+    const res = await apiClient.post(`/api/institute/documents/${id}/retry`);
+    return res.data;
+  },
+
+  cleanupPlaceholders: async (): Promise<{ message: string; deleted_count: number; deleted_ids: number[] }> => {
+    const res = await apiClient.post<{ message: string; deleted_count: number; deleted_ids: number[] }>(
+      '/api/institute/documents/cleanup-placeholders'
+    );
+    return res.data;
+  },
+
   getValidationReport: async (appId: string): Promise<ValidationResponse> => {
     const res = await apiClient.get<ValidationResponse>(`/api/institute/validation/${appId}`);
     return res.data;

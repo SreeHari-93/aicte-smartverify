@@ -45,6 +45,7 @@ export const StatusPill: React.FC<StatusPillProps> = ({ status, className = '' }
     norm === 'fail' ||
     norm === 'missing' ||
     norm === 'failed' ||
+    norm.startsWith('failed') ||
     norm === 'mismatch detected' ||
     norm === 'mismatch_detected'
   ) {

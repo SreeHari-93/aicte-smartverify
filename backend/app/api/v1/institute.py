@@ -898,6 +898,7 @@ def get_document_ocr(
     )
 
 
+@router.post("/documents/{document_id}/retry", response_model=DocumentReprocessResponse)
 @router.post("/documents/{document_id}/reprocess", response_model=DocumentReprocessResponse)
 def reprocess_document_ocr(
     document_id: int,
@@ -916,6 +917,7 @@ def reprocess_document_ocr(
         )
 
     doc.ocr_status = "PENDING"
+    doc.status = "Processing"
     doc.error_message = None
     db.commit()
 
@@ -1418,6 +1420,59 @@ def delete_document(
     )
 
     return {"message": f"Document '{filename}' deleted successfully."}
+
+
+@router.post("/documents/cleanup-placeholders")
+@router.delete("/documents/cleanup-placeholders")
+def cleanup_placeholder_documents(
+    user: User = Depends(get_current_institute_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Deletes 46-byte demo placeholder documents for the user's institute.
+    Unlinks associated certificates, removes files from disk, and deletes document records.
+    """
+    from backend.app.models.certificate import Certificate, CertificateRenewal
+
+    placeholders = (
+        db.query(Document)
+        .filter(Document.file_size == 46, Document.institute_id == user.institute_id)
+        .all()
+    )
+    deleted_ids = []
+
+    for doc in placeholders:
+        # Unlink certificates if referenced
+        db.query(Certificate).filter(Certificate.document_id == doc.id).update({Certificate.document_id: None})
+        db.query(CertificateRenewal).filter(CertificateRenewal.document_id == doc.id).update({CertificateRenewal.document_id: None})
+
+        # Remove file from disk
+        if doc.file_path and os.path.exists(doc.file_path):
+            try:
+                os.remove(doc.file_path)
+            except OSError:
+                pass
+
+        deleted_ids.append(doc.id)
+        db.delete(doc)
+
+    db.commit()
+
+    if deleted_ids:
+        AuditService.log_event(
+            db=db,
+            action="PLACEHOLDER_DOCUMENTS_CLEANED",
+            user_id=user.id,
+            role=user.role,
+            reason=f"Cleaned up {len(deleted_ids)} placeholder documents (IDs: {deleted_ids})",
+            details={"deleted_ids": deleted_ids},
+        )
+
+    return {
+        "message": f"Successfully deleted {len(deleted_ids)} placeholder document(s).",
+        "deleted_count": len(deleted_ids),
+        "deleted_ids": deleted_ids,
+    }
 
 
 # ==============================================================================
