@@ -27,6 +27,11 @@ class Settings(BaseSettings):
     # Governance & Approval Workflow
     RULES_REQUIRE_APPROVAL: bool = False
 
+    # Pipeline & AI Extraction
+    EXTRACTION_LLM_ENABLED: bool = False
+    CLASSIFICATION_CONFIDENCE_THRESHOLD: float = 0.4
+    GEMINI_API_KEY: str = ""
+
     # Cookies
     COOKIE_SECURE: bool = False  # Set to True in HTTPS production
     COOKIE_SAMESITE: str = "lax"  # "strict" or "lax"

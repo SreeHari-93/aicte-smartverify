@@ -9,6 +9,9 @@ from backend.app.models.course import Course
 from backend.app.models.accreditation import Accreditation
 from backend.app.models.rule import Rule, RuleVersion, RuleSet, RuleChangeRequest
 from backend.app.models.document import Document
+from backend.app.models.document_page import DocumentPage
+from backend.app.models.extracted_field import ExtractedField
+from backend.app.models.document_classification import DocumentClassification
 from backend.app.models.document_type import DocumentType
 from backend.app.models.application_category import ApplicationCategory
 from backend.app.models.checklist_item import ChecklistItem
@@ -33,6 +36,9 @@ __all__ = [
     "RuleSet",
     "RuleChangeRequest",
     "Document",
+    "DocumentPage",
+    "ExtractedField",
+    "DocumentClassification",
     "DocumentType",
     "ApplicationCategory",
     "ChecklistItem",

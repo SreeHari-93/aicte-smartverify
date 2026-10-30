@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from backend.app.database import get_db
 from backend.app.models.user import User
+from backend.app.models.application import Application
 from backend.app.models.rule import Rule, RuleVersion, RuleSet, RuleChangeRequest
 from backend.app.models.document_type import DocumentType
 from backend.app.models.application_category import ApplicationCategory
@@ -13,6 +14,8 @@ from backend.app.models.audit_log import AuditLog
 from backend.app.services.audit_service import AuditService
 from backend.app.services.rule_engine.schemas import RuleDefinition
 from backend.app.services.rule_engine.engine import RuleEngine
+from backend.app.services.document_pipeline.readiness import ReadinessService
+from backend.app.schemas.institute import ApplicationReadinessResponse, DuplicateWarningOut
 from backend.app.config import settings
 from backend.app.api.deps import require_role
 from backend.app.schemas.admin import (
@@ -1049,3 +1052,31 @@ def import_configuration(
     )
 
     return {"message": "Configuration bundle imported successfully.", "counts": imported_counts}
+
+
+# ==============================================================================
+# READINESS & DUPLICATES MONITORING
+# ==============================================================================
+@router.get("/applications/{application_id}/readiness", response_model=ApplicationReadinessResponse)
+def get_admin_application_readiness(
+    application_id: int,
+    current_user: User = Depends(require_admin_or_reviewer),
+    db: Session = Depends(get_db),
+):
+    app_record = db.query(Application).filter(Application.id == application_id).first()
+    if not app_record:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Application not found.",
+        )
+
+    return ReadinessService.evaluate_application(db=db, application=app_record)
+
+
+@router.get("/documents/duplicates", response_model=List[DuplicateWarningOut])
+def get_admin_duplicate_documents(
+    current_user: User = Depends(require_admin_or_reviewer),
+    db: Session = Depends(get_db),
+):
+    return ReadinessService.get_all_duplicates(db=db)
+

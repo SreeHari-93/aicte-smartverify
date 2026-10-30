@@ -15,30 +15,41 @@ export const StatusPill: React.FC<StatusPillProps> = ({ status, className = '' }
     norm === 'approved' ||
     norm === 'pass' ||
     norm === 'resolved' ||
-    norm === 'verified'
+    norm === 'verified' ||
+    norm === 'done' ||
+    norm === 'ready'
   ) {
-    // Valid: green text on #E2F6E6
+    // Valid / Done / Ready: green text on #E2F6E6
     bgClass = 'bg-[#E2F6E6] text-[#1E7036]';
   } else if (
     norm === 'expiring soon' ||
+    norm === 'expiring_soon' ||
     norm === 'warning' ||
     norm === 'submitted' ||
     norm === 'in progress' ||
     norm === 'needs attention' ||
+    norm === 'needs_review' ||
+    norm === 'incomplete' ||
+    norm === 'incomplete_fields' ||
     norm === 'under review'
   ) {
-    // Expiring Soon: orange text on #FFF0D6
+    // Expiring Soon / Needs Attention: orange text on #FFF0D6
     bgClass = 'bg-[#FFF0D6] text-[#B85700]';
   } else if (
     norm === 'expired' ||
     norm === 'rejected' ||
-    norm === 'fail'
+    norm === 'fail' ||
+    norm === 'missing' ||
+    norm === 'failed'
   ) {
-    // Expired: red text on #FDE7E9
+    // Expired / Failed / Missing: red text on #FDE7E9
     bgClass = 'bg-[#FDE7E9] text-[#C62828]';
   } else if (norm === 'draft' || norm === 'uploaded' || norm === 'open') {
     // Draft/Uploaded: subtle lavender on #ECE8FB
     bgClass = 'bg-[#ECE8FB] text-[#4A3B82]';
+  } else if (norm === 'processing') {
+    // Processing: blue on #E3F0FF
+    bgClass = 'bg-[#E3F0FF] text-[#0B3C9D]';
   }
 
   return (

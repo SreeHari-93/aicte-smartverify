@@ -173,15 +173,49 @@ class RulesResponse(BaseModel):
 class DocumentItem(BaseModel):
     id: int
     original_filename: str
+    document_type_id: Optional[int] = None
     document_type_code: Optional[str] = None
     file_size: int
     mime_type: str
     sha256_hash: str
     status: str
+    ocr_status: Optional[str] = "PENDING"
+    ocr_confidence: Optional[float] = None
     created_at: datetime
 
     class Config:
         from_attributes = True
+
+
+class DocumentPageOut(BaseModel):
+    page_no: int
+    text: str
+    width: float
+    height: float
+    words_count: int = 0
+    words: Optional[List[Dict[str, Any]]] = None
+
+    class Config:
+        from_attributes = True
+
+
+class DocumentOCRResponse(BaseModel):
+    document_id: int
+    filename: str
+    ocr_status: str
+    ocr_engine: Optional[str] = None
+    ocr_confidence: Optional[float] = None
+    page_count: Optional[int] = 0
+    language: Optional[str] = "en"
+    processed_at: Optional[datetime] = None
+    error_message: Optional[str] = None
+    pages: List[DocumentPageOut] = []
+
+
+class DocumentReprocessResponse(BaseModel):
+    message: str
+    document_id: int
+    ocr_status: str
 
 
 class InstituteChecklistItem(BaseModel):
@@ -290,4 +324,120 @@ class NotificationItem(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# --- Classification & Extraction Schemas ---
+class CandidateOut(BaseModel):
+    code: str
+    name: str
+    score: float
+    matched_keywords: List[str] = []
+
+
+class ClassificationOut(BaseModel):
+    predicted_type: str
+    score: float
+    candidates: List[CandidateOut] = []
+    mismatch_flag: bool = False
+    warning_message: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class ExtractedFieldOut(BaseModel):
+    id: Optional[int] = None
+    key: str
+    value: Optional[str] = None
+    normalized_value: Optional[str] = None
+    confidence: float
+    page_no: int = 1
+    bbox: Optional[List[float]] = None
+    source: str
+    needs_review: bool
+    verified_by_user: bool = False
+    corrected_value: Optional[str] = None
+    effective_value: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class DocumentExtractionResponse(BaseModel):
+    document_id: int
+    filename: str
+    document_type_code: Optional[str] = None
+    ocr_status: str
+    classification: Optional[ClassificationOut] = None
+    fields: List[ExtractedFieldOut] = []
+    expiry_date: Optional[str] = None
+    issue_date: Optional[str] = None
+    is_expired: Optional[bool] = None
+    days_remaining: Optional[int] = None
+
+
+class FieldCorrectionRequest(BaseModel):
+    corrected_value: str = Field(..., description="The verified or corrected value for the field")
+
+
+class FieldCorrectionResponse(BaseModel):
+    message: str
+    field: ExtractedFieldOut
+
+
+# --- Readiness Schemas ---
+class ChecklistItemReadinessOut(BaseModel):
+    checklist_item_id: int
+    document_type_code: str
+    document_type_name: str
+    is_mandatory: bool
+    status: str
+    document_id: Optional[int] = None
+    document_filename: Optional[str] = None
+    min_validity_days_remaining: Optional[int] = None
+    days_remaining: Optional[int] = None
+    expiry_date: Optional[str] = None
+    is_duplicate: bool = False
+    duplicate_with_id: Optional[int] = None
+    help_text: Optional[str] = None
+
+
+class FieldProblemOut(BaseModel):
+    document_id: Optional[int] = None
+    document_type: str
+    page_no: int = 1
+    field_key: str
+    problem: str
+    value: Optional[str] = None
+
+
+class DuplicateWarningOut(BaseModel):
+    document_id: int
+    document_type: Optional[str] = None
+    original_filename: str
+    duplicate_with_id: int
+    duplicate_type: Optional[str] = None
+    duplicate_filename: str
+    application_id: Optional[int] = None
+    institute_id: int
+    sha256_hash: str
+    message: str
+
+
+class ApplicationReadinessResponse(BaseModel):
+    application_id: int
+    application_number: str
+    category: str
+    ruleset_name: str
+    ruleset_version: str
+    readiness_percentage: float
+    status: str
+    total_items: int
+    ready_items: int
+    missing_items: List[str] = []
+    items: List[ChecklistItemReadinessOut] = []
+    field_problems: List[FieldProblemOut] = []
+    duplicates: List[DuplicateWarningOut] = []
+
+
 

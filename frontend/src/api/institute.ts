@@ -139,7 +139,93 @@ export interface DocumentItem {
   mime_type: string;
   sha256_hash: string;
   status: string;
+  ocr_status?: string;
+  ocr_confidence?: number;
   created_at: string;
+}
+
+export interface CandidateOut {
+  code: string;
+  name: string;
+  score: number;
+  matched_keywords: string[];
+}
+
+export interface ClassificationOut {
+  predicted_type: string;
+  score: number;
+  candidates: CandidateOut[];
+  mismatch_flag: boolean;
+  warning_message?: string;
+}
+
+export interface ExtractedFieldItem {
+  id?: number;
+  key: string;
+  value?: string;
+  normalized_value?: string;
+  confidence: number;
+  page_no: number;
+  bbox?: number[];
+  source: string;
+  needs_review: boolean;
+  verified_by_user: boolean;
+  corrected_value?: string;
+  effective_value?: string;
+}
+
+export interface DocumentExtractionData {
+  document_id: number;
+  filename: string;
+  document_type_code?: string;
+  ocr_status: string;
+  classification?: ClassificationOut;
+  fields: ExtractedFieldItem[];
+  expiry_date?: string;
+  issue_date?: string;
+  is_expired?: boolean;
+  days_remaining?: number;
+}
+
+export interface ChecklistItemReadiness {
+  checklist_item_id: number;
+  document_type_code: string;
+  document_type_name: string;
+  is_mandatory: boolean;
+  status: string;
+  document_id?: number;
+  document_filename?: string;
+  min_validity_days_remaining?: number;
+  days_remaining?: number;
+  expiry_date?: string;
+  is_duplicate: boolean;
+  duplicate_with_id?: number;
+  help_text?: string;
+}
+
+export interface FieldProblem {
+  document_id?: number;
+  document_type: string;
+  page_no: number;
+  field_key: string;
+  problem: string;
+  value?: string;
+}
+
+export interface ApplicationReadinessData {
+  application_id: number;
+  application_number: string;
+  category: string;
+  ruleset_name: string;
+  ruleset_version: string;
+  readiness_percentage: number;
+  status: string;
+  total_items: number;
+  ready_items: number;
+  missing_items: string[];
+  items: ChecklistItemReadiness[];
+  field_problems: FieldProblem[];
+  duplicates: any[];
 }
 
 export interface InstituteChecklistItem {
@@ -357,6 +443,23 @@ export const instituteApi = {
 
   markAllNotificationsRead: async () => {
     const res = await apiClient.patch('/api/institute/notifications/read-all');
+    return res.data;
+  },
+
+  getDocumentExtraction: async (docId: number): Promise<DocumentExtractionData> => {
+    const res = await apiClient.get<DocumentExtractionData>(`/api/institute/documents/${docId}/extraction`);
+    return res.data;
+  },
+
+  correctField: async (docId: number, key: string, corrected_value: string) => {
+    const res = await apiClient.patch(`/api/institute/documents/${docId}/fields/${key}`, {
+      corrected_value,
+    });
+    return res.data;
+  },
+
+  getApplicationReadiness: async (appId: number): Promise<ApplicationReadinessData> => {
+    const res = await apiClient.get<ApplicationReadinessData>(`/api/institute/applications/${appId}/readiness`);
     return res.data;
   },
 };

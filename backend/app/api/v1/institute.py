@@ -3,7 +3,7 @@ import os
 import uuid
 from datetime import datetime, timezone, date
 from typing import Optional, List
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form, status, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form, status, Response, BackgroundTasks
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
@@ -16,6 +16,9 @@ from backend.app.models.course import Course
 from backend.app.models.accreditation import Accreditation
 from backend.app.models.rule import Rule, RuleSet
 from backend.app.models.document import Document
+from backend.app.models.document_page import DocumentPage
+from backend.app.models.extracted_field import ExtractedField
+from backend.app.models.document_classification import DocumentClassification
 from backend.app.models.document_type import DocumentType
 from backend.app.models.application_category import ApplicationCategory
 from backend.app.models.checklist_item import ChecklistItem
@@ -24,6 +27,8 @@ from backend.app.models.notification import Notification
 from backend.app.models.report import Report
 from backend.app.services.audit_service import AuditService
 from backend.app.services.report_service import ReportService
+from backend.app.services.document_pipeline.ocr import OCRService
+from backend.app.services.document_pipeline.readiness import ReadinessService
 from backend.app.api.deps import get_current_user
 
 from backend.app.schemas.institute import (
@@ -43,6 +48,16 @@ from backend.app.schemas.institute import (
     RuleSummary,
     RulesResponse,
     DocumentItem,
+    DocumentPageOut,
+    DocumentOCRResponse,
+    DocumentReprocessResponse,
+    CandidateOut,
+    ClassificationOut,
+    ExtractedFieldOut,
+    DocumentExtractionResponse,
+    FieldCorrectionRequest,
+    FieldCorrectionResponse,
+    ApplicationReadinessResponse,
     InstituteChecklistItem,
     InstituteChecklistResponse,
     ValidationResponse,
@@ -331,6 +346,31 @@ def create_application_draft(
     return {"message": "Application draft created successfully.", "application": new_app}
 
 
+@router.get("/applications/{application_id}/readiness", response_model=ApplicationReadinessResponse)
+def get_institute_application_readiness(
+    application_id: int,
+    user: User = Depends(get_current_institute_user),
+    db: Session = Depends(get_db),
+):
+    app_record = (
+        db.query(Application)
+        .filter(
+            Application.id == application_id,
+            Application.institute_id == user.institute_id,
+        )
+        .first()
+    )
+    if not app_record:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Application not found or access denied.",
+        )
+
+    readiness = ReadinessService.evaluate_application(db=db, application=app_record)
+    return readiness
+
+
+
 # ==============================================================================
 # 4. RULES ENDPOINT
 # ==============================================================================
@@ -424,6 +464,7 @@ MAGIC_BYTES = {
 
 @router.post("/documents", response_model=DocumentItem, status_code=status.HTTP_201_CREATED)
 async def upload_document(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     application_id: Optional[int] = Form(None),
     document_type_code: Optional[str] = Form(None),
@@ -436,10 +477,13 @@ async def upload_document(
 
     doc_type_code_clean = document_type_code.strip().upper() if document_type_code else None
     max_limit_mb = 10
+    dt_id = None
     if doc_type_code_clean:
         dt = db.query(DocumentType).filter(DocumentType.code == doc_type_code_clean).first()
-        if dt and dt.max_size_mb:
-            max_limit_mb = dt.max_size_mb
+        if dt:
+            dt_id = dt.id
+            if dt.max_size_mb:
+                max_limit_mb = dt.max_size_mb
 
     if file_size > max_limit_mb * 1024 * 1024:
         raise HTTPException(
@@ -480,6 +524,7 @@ async def upload_document(
     doc = Document(
         institute_id=user.institute_id,
         application_id=application_id,
+        document_type_id=dt_id,
         document_type_code=doc_type_code_clean,
         original_filename=file.filename,
         stored_filename=stored_name,
@@ -488,6 +533,7 @@ async def upload_document(
         mime_type=mime,
         sha256_hash=sha256,
         status="Uploaded",
+        ocr_status="PENDING",
     )
     db.add(doc)
     db.commit()
@@ -499,9 +545,291 @@ async def upload_document(
         user_id=user.id,
         role=user.role,
         reason=f"Uploaded file: {file.filename} ({file_size} bytes, SHA256: {sha256[:12]}..., type: {doc_type_code_clean or 'unspecified'})",
+        details={"document_id": doc.id, "ocr_status": "PENDING"},
     )
 
+    # Launch asynchronous OCR processing
+    background_tasks.add_task(OCRService.run_document_ocr_task, doc.id)
+
     return doc
+
+
+@router.get("/documents/{document_id}/ocr", response_model=DocumentOCRResponse)
+def get_document_ocr(
+    document_id: int,
+    user: User = Depends(get_current_institute_user),
+    db: Session = Depends(get_db),
+):
+    doc = db.query(Document).filter(
+        Document.id == document_id,
+        Document.institute_id == user.institute_id,
+    ).first()
+    if not doc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found or access denied.",
+        )
+
+    pages = (
+        db.query(DocumentPage)
+        .filter(DocumentPage.document_id == doc.id)
+        .order_by(DocumentPage.page_no.asc())
+        .all()
+    )
+
+    page_outs = [
+        DocumentPageOut(
+            page_no=p.page_no,
+            text=p.text,
+            width=p.width,
+            height=p.height,
+            words_count=len(p.words_json or []),
+            words=p.words_json,
+        )
+        for p in pages
+    ]
+
+    return DocumentOCRResponse(
+        document_id=doc.id,
+        filename=doc.original_filename,
+        ocr_status=doc.ocr_status,
+        ocr_engine=doc.ocr_engine,
+        ocr_confidence=doc.ocr_confidence,
+        page_count=doc.page_count or len(page_outs),
+        language=doc.language or "en",
+        processed_at=doc.processed_at,
+        error_message=doc.error_message,
+        pages=page_outs,
+    )
+
+
+@router.post("/documents/{document_id}/reprocess", response_model=DocumentReprocessResponse)
+def reprocess_document_ocr(
+    document_id: int,
+    background_tasks: BackgroundTasks,
+    user: User = Depends(get_current_institute_user),
+    db: Session = Depends(get_db),
+):
+    doc = db.query(Document).filter(
+        Document.id == document_id,
+        Document.institute_id == user.institute_id,
+    ).first()
+    if not doc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found or access denied.",
+        )
+
+    doc.ocr_status = "PENDING"
+    doc.error_message = None
+    db.commit()
+
+    AuditService.log_event(
+        db=db,
+        action="DOCUMENT_REPROCESS_REQUESTED",
+        user_id=user.id,
+        role=user.role,
+        reason=f"Reprocess OCR requested for document {doc.id} ({doc.original_filename})",
+        details={"document_id": doc.id},
+    )
+
+    background_tasks.add_task(OCRService.run_document_ocr_task, doc.id)
+
+    return DocumentReprocessResponse(
+        message="Document re-processing queued successfully.",
+        document_id=doc.id,
+        ocr_status="PENDING",
+    )
+
+
+@router.get("/documents/{document_id}/extraction", response_model=DocumentExtractionResponse)
+def get_document_extraction(
+    document_id: int,
+    user: User = Depends(get_current_institute_user),
+    db: Session = Depends(get_db),
+):
+    doc = db.query(Document).filter(
+        Document.id == document_id,
+        Document.institute_id == user.institute_id,
+    ).first()
+    if not doc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found or access denied.",
+        )
+
+    # 1. Classification details
+    classification_out = None
+    classification = db.query(DocumentClassification).filter(DocumentClassification.document_id == doc.id).first()
+    if classification:
+        candidates_out = [
+            CandidateOut(
+                code=c.get("code", ""),
+                name=c.get("name", ""),
+                score=c.get("score", 0.0),
+                matched_keywords=c.get("matched_keywords", []),
+            )
+            for c in (classification.candidates_json or [])
+        ]
+        classification_out = ClassificationOut(
+            predicted_type=classification.predicted_type,
+            score=classification.score,
+            candidates=candidates_out,
+            mismatch_flag=classification.mismatch_flag,
+            warning_message=classification.warning_message,
+        )
+
+    # 2. Extracted fields
+    raw_fields = (
+        db.query(ExtractedField)
+        .filter(ExtractedField.document_id == doc.id)
+        .order_by(ExtractedField.id.asc())
+        .all()
+    )
+
+    field_outs = [
+        ExtractedFieldOut(
+            id=f.id,
+            key=f.key,
+            value=f.value,
+            normalized_value=f.normalized_value,
+            confidence=f.confidence,
+            page_no=f.page_no,
+            bbox=f.bbox_json,
+            source=f.source,
+            needs_review=f.needs_review,
+            verified_by_user=f.verified_by_user,
+            corrected_value=f.corrected_value,
+            effective_value=f.corrected_value if f.corrected_value is not None else f.value,
+        )
+        for f in raw_fields
+    ]
+
+    ext_data = doc.extracted_data or {}
+    expiry_date = ext_data.get("expiry_date")
+    issue_date = ext_data.get("issue_date")
+    is_expired = ext_data.get("is_expired")
+    days_remaining = ext_data.get("days_remaining")
+
+    # Resilient fallback from fields
+    if not expiry_date:
+        for f in raw_fields:
+            if f.key.lower() in {"valid_upto", "expiry_date", "valid_until", "maturity_date"}:
+                val = f.corrected_value or f.normalized_value or f.value
+                if val:
+                    try:
+                        d = date.fromisoformat(val)
+                        expiry_date = d.isoformat()
+                        today = date.today()
+                        days_remaining = (d - today).days
+                        is_expired = days_remaining < 0
+                        break
+                    except ValueError:
+                        pass
+
+    return DocumentExtractionResponse(
+        document_id=doc.id,
+        filename=doc.original_filename,
+        document_type_code=doc.document_type_code,
+        ocr_status=doc.ocr_status,
+        classification=classification_out,
+        fields=field_outs,
+        expiry_date=expiry_date,
+        issue_date=issue_date,
+        is_expired=is_expired,
+        days_remaining=days_remaining,
+    )
+
+
+@router.patch("/documents/{document_id}/fields/{key}", response_model=FieldCorrectionResponse)
+def correct_extracted_field(
+    document_id: int,
+    key: str,
+    payload: FieldCorrectionRequest,
+    user: User = Depends(get_current_institute_user),
+    db: Session = Depends(get_db),
+):
+    doc = db.query(Document).filter(
+        Document.id == document_id,
+        Document.institute_id == user.institute_id,
+    ).first()
+    if not doc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found or access denied.",
+        )
+
+    field = (
+        db.query(ExtractedField)
+        .filter(
+            ExtractedField.document_id == doc.id,
+            ExtractedField.key == key,
+        )
+        .first()
+    )
+
+    old_val = field.value if field else None
+    if not field:
+        # Create a new verified field if it was missing from original extraction
+        field = ExtractedField(
+            document_id=doc.id,
+            key=key,
+            value="",
+            normalized_value=payload.corrected_value,
+            confidence=1.0,
+            page_no=1,
+            source="manual",
+            needs_review=False,
+            verified_by_user=True,
+            corrected_value=payload.corrected_value,
+            corrected_by=user.id,
+        )
+        db.add(field)
+    else:
+        field.corrected_value = payload.corrected_value
+        field.verified_by_user = True
+        field.corrected_by = user.id
+        field.needs_review = False
+
+    db.commit()
+    db.refresh(field)
+
+    # Write audit log for correction
+    AuditService.log_event(
+        db=db,
+        action="DOCUMENT_FIELD_CORRECTED",
+        user_id=user.id,
+        role=user.role,
+        reason=f"Field '{key}' corrected for document ID {doc.id}",
+        details={
+            "document_id": doc.id,
+            "field_key": key,
+            "original_value": old_val,
+            "corrected_value": payload.corrected_value,
+            "corrected_by_user_id": user.id,
+        },
+    )
+
+    field_out = ExtractedFieldOut(
+        id=field.id,
+        key=field.key,
+        value=field.value,
+        normalized_value=field.normalized_value,
+        confidence=field.confidence,
+        page_no=field.page_no,
+        bbox=field.bbox_json,
+        source=field.source,
+        needs_review=field.needs_review,
+        verified_by_user=field.verified_by_user,
+        corrected_value=field.corrected_value,
+        effective_value=field.corrected_value if field.corrected_value is not None else field.value,
+    )
+
+    return FieldCorrectionResponse(
+        message=f"Field '{key}' corrected and verified successfully.",
+        field=field_out,
+    )
+
 
 
 @router.get("/checklist", response_model=InstituteChecklistResponse)
