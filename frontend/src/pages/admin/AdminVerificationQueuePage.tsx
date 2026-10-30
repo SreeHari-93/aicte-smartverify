@@ -17,6 +17,7 @@ import {
 import { adminApi, VerificationQueueItemDetailed, DocumentTypeOut } from '../../api/admin';
 import { StatusPill } from '../../components/StatusPill';
 import { Drawer } from '../../components/Drawer';
+import { Modal } from '../../components/Modal';
 
 export const AdminVerificationQueuePage: React.FC = () => {
   const [items, setItems] = useState<VerificationQueueItemDetailed[]>([]);
@@ -504,73 +505,65 @@ export const AdminVerificationQueuePage: React.FC = () => {
       </Drawer>
 
       {/* Decision Modal */}
-      {isDecisionModalOpen && selectedItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 animate-scale-in">
-            <h3 className="text-base font-bold text-[#0F2A5C] tracking-tight mb-1 flex items-center gap-2">
-              {decisionType === 'APPROVED' ? (
-                <>
-                  <CheckCircle2 size={18} className="text-emerald-600" />
-                  <span>Confirm Approval as Verified</span>
-                </>
-              ) : decisionType === 'REJECTED' ? (
-                <>
-                  <XCircle size={18} className="text-red-600" />
-                  <span>Confirm Rejection (Mismatch)</span>
-                </>
-              ) : (
-                <>
-                  <RotateCcw size={18} className="text-[#F58220]" />
-                  <span>Request Document Re-upload</span>
-                </>
-              )}
-            </h3>
-            <p className="text-xs text-slate-500 mb-4 leading-relaxed">
-              Target: <strong className="text-slate-800">{selectedItem.document_filename}</strong> ({selectedItem.institute_name}).
+      {selectedItem && (
+        <Modal
+          isOpen={isDecisionModalOpen}
+          onClose={() => setIsDecisionModalOpen(false)}
+          title={
+            decisionType === 'APPROVED'
+              ? 'Confirm Approval as Verified'
+              : decisionType === 'REJECTED'
+              ? 'Confirm Rejection (Mismatch)'
+              : 'Request Document Re-upload'
+          }
+          subtitle={`Target: ${selectedItem.document_filename} (${selectedItem.institute_name})`}
+          maxWidth="max-w-[640px]"
+          footer={
+            <>
+              <button
+                type="button"
+                onClick={() => setIsDecisionModalOpen(false)}
+                className="h-11 px-5 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-200 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isSubmitting || !decisionReason.trim()}
+                onClick={(e) => handleDecisionSubmit(e as any)}
+                className={`h-11 px-6 text-white font-bold rounded-xl shadow-sm transition-colors flex items-center gap-2 text-sm disabled:opacity-50 ${
+                  decisionType === 'APPROVED'
+                    ? 'bg-emerald-600 hover:bg-emerald-700'
+                    : decisionType === 'REJECTED'
+                    ? 'bg-red-600 hover:bg-red-700'
+                    : 'bg-[#F58220] hover:bg-[#E06F0F]'
+                }`}
+              >
+                {isSubmitting && <Loader2 size={16} className="animate-spin" />}
+                <span>Confirm Decision</span>
+              </button>
+            </>
+          }
+        >
+          <div className="space-y-6">
+            <p className="text-xs text-slate-500 leading-relaxed">
               Your determination will override the automated verification status while preserving the original record in the append-only audit trail.
             </p>
-
-            <form onSubmit={handleDecisionSubmit} className="space-y-4 text-xs">
-              <div>
-                <label className="font-bold text-[#0F2A5C] block mb-1">
-                  Mandatory Officer Rationale <span className="text-red-500">*</span>
-                </label>
-                <textarea
-                  required
-                  rows={4}
-                  placeholder="State clear reasons (e.g. physical register verified, seal authenticated, or deficiency observed)..."
-                  value={decisionReason}
-                  onChange={(e) => setDecisionReason(e.target.value)}
-                  className="w-full p-3 rounded-lg border border-slate-300 focus:border-[#0B3C9D] outline-none text-slate-800 resize-none"
-                />
-              </div>
-
-              <div className="flex justify-end gap-2.5 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setIsDecisionModalOpen(false)}
-                  className="px-4 py-2 border border-slate-200 text-slate-600 rounded-lg font-semibold hover:bg-slate-50 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className={`px-4 py-2 text-white font-bold rounded-lg shadow-sm transition-colors flex items-center gap-1.5 ${
-                    decisionType === 'APPROVED'
-                      ? 'bg-emerald-600 hover:bg-emerald-700'
-                      : decisionType === 'REJECTED'
-                      ? 'bg-red-600 hover:bg-red-700'
-                      : 'bg-[#F58220] hover:bg-[#E06F0F]'
-                  }`}
-                >
-                  {isSubmitting && <Loader2 size={14} className="animate-spin" />}
-                  <span>Confirm Decision</span>
-                </button>
-              </div>
-            </form>
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase mb-2">
+                Mandatory Officer Rationale <span className="text-red-500">*</span>
+              </label>
+              <textarea
+                required
+                rows={4}
+                placeholder="State clear reasons (e.g. physical register verified, seal authenticated, or deficiency observed)..."
+                value={decisionReason}
+                onChange={(e) => setDecisionReason(e.target.value)}
+                className="w-full p-3.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-[#0B3C9D] text-slate-800 text-sm resize-none"
+              />
+            </div>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   );

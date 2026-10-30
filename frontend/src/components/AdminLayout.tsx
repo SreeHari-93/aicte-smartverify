@@ -19,19 +19,19 @@ export const AdminLayout: React.FC = () => {
         {/* Left Admin Sidebar (~255px wide, Cream #FDF0DC) */}
         <AdminSidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
 
-        {/* Main Content Area with full-bleed institute.jpg background */}
+        {/* Main Content Area with full-bleed aicte-building.jpeg background */}
         <main
           className="flex-1 min-w-0 p-4 sm:p-6 md:p-8 lg:p-10 relative overflow-y-auto"
           style={{
-            backgroundImage: "url('/institute.jpg')",
+            backgroundImage: "url('/aicte-building.jpeg')",
             backgroundSize: 'cover',
             backgroundPosition: 'center',
             backgroundRepeat: 'no-repeat',
             backgroundAttachment: 'fixed',
           }}
         >
-          {/* Subtle light overlay to ensure text contrast over building background */}
-          <div className="absolute inset-0 bg-black/15 pointer-events-none z-0" />
+          {/* Soft light overlay (rgba(255,255,255,0.35)) so cards and text stay readable */}
+          <div className="absolute inset-0 bg-white/35 pointer-events-none z-0" />
 
           {/* Page Content Outlet (relative z-10 for cards to float over image) */}
           <div className="relative z-10 max-w-7xl mx-auto w-full">

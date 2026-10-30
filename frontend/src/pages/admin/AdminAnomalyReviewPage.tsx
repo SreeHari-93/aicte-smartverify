@@ -10,13 +10,13 @@ import {
   Eye,
   Loader2,
   RefreshCw,
-  Sparkles,
   Layers,
   Image,
 } from 'lucide-react';
 import { adminApi, AdminAnomalyFlagOut } from '../../api/admin';
 import { StatusPill } from '../../components/StatusPill';
 import { Drawer } from '../../components/Drawer';
+import { Modal } from '../../components/Modal';
 
 export const AdminAnomalyReviewPage: React.FC = () => {
   const [flags, setFlags] = useState<AdminAnomalyFlagOut[]>([]);
@@ -497,55 +497,56 @@ export const AdminAnomalyReviewPage: React.FC = () => {
       </Drawer>
 
       {/* Decision Modal */}
-      {isModalOpen && selectedFlag && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-200 animate-scale-in">
-            <h3 className="text-base font-bold text-[#0F2A5C] tracking-tight mb-1 flex items-center gap-2">
-              <Sparkles size={18} className="text-[#0B3C9D]" />
-              <span>Record Decision: "{chosenDecision}"</span>
-            </h3>
-            <p className="text-xs text-slate-500 mb-4 leading-relaxed">
-              Target Flag #{selectedFlag.id} ({selectedFlag.detector}). Note is mandatory and will be recorded in the append-only audit trail.
+      {selectedFlag && (
+        <Modal
+          isOpen={isModalOpen}
+          onClose={() => setIsModalOpen(false)}
+          title={`Record Review Decision: "${chosenDecision}"`}
+          subtitle={`Target Flag #${selectedFlag.id} (${selectedFlag.detector})`}
+          maxWidth="max-w-[640px]"
+          footer={
+            <>
+              <button
+                type="button"
+                onClick={() => setIsModalOpen(false)}
+                className="h-11 px-5 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-200 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isSubmitting || !decisionNote.trim()}
+                onClick={(e) => handleDecisionSubmit(e as any)}
+                className="h-11 px-6 bg-[#0B3C9D] hover:bg-[#092E7A] text-white font-bold rounded-xl shadow-sm transition-colors flex items-center gap-2 text-sm disabled:opacity-50"
+              >
+                {isSubmitting && <Loader2 size={16} className="animate-spin" />}
+                <span>Save Determination</span>
+              </button>
+            </>
+          }
+        >
+          <div className="space-y-6">
+            <p className="text-xs text-slate-500 leading-relaxed">
+              Your determination is mandatory and will be permanently recorded in the append-only audit trail.
             </p>
-
-            <form onSubmit={handleDecisionSubmit} className="space-y-4 text-xs">
-              <div>
-                <label className="font-bold text-[#0F2A5C] block mb-1">
-                  Mandatory Review Note <span className="text-red-500">*</span>
-                </label>
-                <textarea
-                  required
-                  rows={4}
-                  placeholder="State the regulatory grounds, clarification specifics, or verification basis..."
-                  value={decisionNote}
-                  onChange={(e) => setDecisionNote(e.target.value)}
-                  className="w-full p-3 rounded-lg border border-slate-300 focus:border-[#0B3C9D] outline-none text-slate-800 resize-none"
-                />
-                <span className="text-[10px] text-slate-400 mt-1 block">
-                  Wording standard: Use 'needs verification' / 'potential anomaly'.
-                </span>
-              </div>
-
-              <div className="flex justify-end gap-2.5 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 border border-slate-200 text-slate-600 rounded-lg font-semibold hover:bg-slate-50 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="px-4 py-2 bg-[#0B3C9D] hover:bg-[#092E7A] text-white font-bold rounded-lg shadow-sm transition-colors flex items-center gap-1.5"
-                >
-                  {isSubmitting && <Loader2 size={14} className="animate-spin" />}
-                  <span>Save Determination</span>
-                </button>
-              </div>
-            </form>
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase mb-2">
+                Mandatory Review Note <span className="text-red-500">*</span>
+              </label>
+              <textarea
+                required
+                rows={4}
+                placeholder="State the regulatory grounds, clarification specifics, or verification basis..."
+                value={decisionNote}
+                onChange={(e) => setDecisionNote(e.target.value)}
+                className="w-full p-3.5 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-[#0B3C9D] text-slate-800 text-sm resize-none"
+              />
+              <span className="text-xs text-slate-500 mt-2 block font-medium">
+                Wording standard: AICTE protocol requires using &apos;needs verification&apos; or &apos;potential anomaly&apos;.
+              </span>
+            </div>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   );

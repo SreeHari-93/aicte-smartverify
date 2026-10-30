@@ -313,18 +313,18 @@ export const AdminChecklistsPage: React.FC = () => {
 
       {/* Checklists Table */}
       <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto w-full">
           <table className="w-full text-left text-sm text-slate-700">
             <thead className="bg-slate-50 text-slate-600 font-semibold border-b border-slate-200 uppercase text-xs tracking-wider">
               <tr>
-                <th className="py-3.5 px-4 w-12 text-center">Order</th>
-                <th className="py-3.5 px-4">Document Type</th>
-                <th className="py-3.5 px-4">Requirement</th>
-                <th className="py-3.5 px-4">Institute Type</th>
-                <th className="py-3.5 px-4">Min Count</th>
-                <th className="py-3.5 px-4">Validity Requirement</th>
-                <th className="py-3.5 px-4">Guidance / Help Text</th>
-                <th className="py-3.5 px-4 text-right">Actions</th>
+                <th className="py-4 px-5 w-16 text-center">Order</th>
+                <th className="py-4 px-5">Document Type</th>
+                <th className="py-4 px-5">Requirement</th>
+                <th className="py-4 px-5">Institute Type</th>
+                <th className="py-4 px-5">Min Count</th>
+                <th className="py-4 px-5">Validity Requirement</th>
+                <th className="py-4 px-5">Guidance / Help Text</th>
+                <th className="py-4 px-5 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -337,7 +337,7 @@ export const AdminChecklistsPage: React.FC = () => {
               ) : (
                 filteredItems.map((item, idx) => (
                   <tr key={item.id} className="hover:bg-slate-50/70 transition-colors">
-                    <td className="py-3.5 px-4 text-center">
+                    <td className="py-4 px-5 text-center">
                       <div className="flex items-center justify-center gap-1">
                         <span className="font-mono font-bold text-slate-500 w-5">{idx + 1}</span>
                         <div className="flex flex-col">
@@ -358,28 +358,28 @@ export const AdminChecklistsPage: React.FC = () => {
                         </div>
                       </div>
                     </td>
-                    <td className="py-3.5 px-4">
+                    <td className="py-4 px-5">
                       <p className="font-bold text-[#0F2A5C]">{item.document_type?.name || 'Document'}</p>
                       <p className="text-xs font-mono text-[#0B3C9D]">{item.document_type?.code}</p>
                     </td>
-                    <td className="py-3.5 px-4 whitespace-nowrap">
+                    <td className="py-4 px-5 whitespace-nowrap">
                       <StatusPill status={item.is_mandatory ? 'MANDATORY' : 'OPTIONAL'} />
                     </td>
-                    <td className="py-3.5 px-4 whitespace-nowrap text-xs font-semibold text-slate-700">
-                      <span className="px-2 py-0.5 rounded bg-slate-100 border border-slate-200">
+                    <td className="py-4 px-5 whitespace-nowrap text-xs font-semibold text-slate-700">
+                      <span className="px-2.5 py-1 rounded-md bg-slate-100 border border-slate-200">
                         {item.institute_type || 'ALL'}
                       </span>
                     </td>
-                    <td className="py-3.5 px-4 whitespace-nowrap text-xs font-mono font-bold text-slate-700">
+                    <td className="py-4 px-5 whitespace-nowrap text-xs font-mono font-bold text-slate-700">
                       {item.min_count || 1} file(s)
                     </td>
-                    <td className="py-3.5 px-4 whitespace-nowrap text-xs text-slate-600">
+                    <td className="py-4 px-5 whitespace-nowrap text-xs text-slate-600">
                       Min {item.min_validity_days_remaining || 30} days validity
                     </td>
-                    <td className="py-3.5 px-4 text-xs text-slate-500 max-w-xs truncate">
+                    <td className="py-4 px-5 text-xs text-slate-500 max-w-xs truncate">
                       {item.help_text || '—'}
                     </td>
-                    <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                    <td className="py-4 px-5 text-right whitespace-nowrap">
                       <div className="flex items-center justify-end gap-1.5">
                         <button
                           onClick={() => openEditModal(item)}
@@ -412,17 +412,36 @@ export const AdminChecklistsPage: React.FC = () => {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         title={isEditing ? 'Edit Checklist Item' : `Add Required Document for ${selectedCategory}`}
-        maxWidth="max-w-xl"
+        subtitle="Specify document type obligation, discipline applicability, and validity rules"
+        maxWidth="max-w-[840px]"
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={() => setIsModalOpen(false)}
+              className="h-11 px-5 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-200 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleSave}
+              className="h-11 px-6 rounded-xl text-sm font-bold bg-[#0B3C9D] text-white hover:bg-[#0F2A5C] shadow-sm transition-colors"
+            >
+              {isEditing ? 'Save Changes' : 'Add to Checklist'}
+            </button>
+          </>
+        }
       >
-        <div className="space-y-4">
+        <div className="space-y-6">
           <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+            <label className="block text-xs font-bold text-slate-700 uppercase mb-2">
               Document Type *
             </label>
             <select
               value={formData.document_type_id}
               onChange={(e) => setFormData({ ...formData, document_type_id: parseInt(e.target.value) || 0 })}
-              className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm font-semibold"
+              className="w-full h-11 px-3.5 rounded-lg border border-slate-300 text-sm font-semibold text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-[#0B3C9D]"
             >
               {docTypes.map((dt) => (
                 <option key={dt.id} value={dt.id}>
@@ -432,15 +451,15 @@ export const AdminChecklistsPage: React.FC = () => {
             </select>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+              <label className="block text-xs font-bold text-slate-700 uppercase mb-2">
                 Institute Discipline *
               </label>
               <select
                 value={formData.institute_type}
                 onChange={(e) => setFormData({ ...formData, institute_type: e.target.value })}
-                className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm"
+                className="w-full h-11 px-3.5 rounded-lg border border-slate-300 text-sm font-semibold text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-[#0B3C9D]"
               >
                 {INSTITUTE_TYPES.map((t) => (
                   <option key={t} value={t}>{t}</option>
@@ -449,7 +468,7 @@ export const AdminChecklistsPage: React.FC = () => {
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+              <label className="block text-xs font-bold text-slate-700 uppercase mb-2">
                 Minimum Upload Count *
               </label>
               <input
@@ -457,14 +476,14 @@ export const AdminChecklistsPage: React.FC = () => {
                 min={1}
                 value={formData.min_count}
                 onChange={(e) => setFormData({ ...formData, min_count: parseInt(e.target.value) || 1 })}
-                className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm"
+                className="w-full h-11 px-3.5 rounded-lg border border-slate-300 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-[#0B3C9D]"
               />
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+              <label className="block text-xs font-bold text-slate-700 uppercase mb-2">
                 Min Days Validity Required
               </label>
               <input
@@ -473,12 +492,12 @@ export const AdminChecklistsPage: React.FC = () => {
                 onChange={(e) =>
                   setFormData({ ...formData, min_validity_days_remaining: parseInt(e.target.value) || 30 })
                 }
-                className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm"
+                className="w-full h-11 px-3.5 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B3C9D]"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+              <label className="block text-xs font-bold text-slate-700 uppercase mb-2">
                 Assign to RuleSet (Optional)
               </label>
               <select
@@ -489,7 +508,7 @@ export const AdminChecklistsPage: React.FC = () => {
                     ruleset_id: e.target.value ? parseInt(e.target.value) : undefined,
                   })
                 }
-                className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm"
+                className="w-full h-11 px-3.5 rounded-lg border border-slate-300 text-sm text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-[#0B3C9D]"
               >
                 <option value="">Global Active RuleSet</option>
                 {ruleSets.map((rs) => (
@@ -501,47 +520,31 @@ export const AdminChecklistsPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="pt-2">
-            <label className="flex items-center gap-2 cursor-pointer">
+          <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
+            <label className="flex items-center gap-2.5 cursor-pointer select-none">
               <input
                 type="checkbox"
                 checked={formData.is_mandatory}
                 onChange={(e) => setFormData({ ...formData, is_mandatory: e.target.checked })}
-                className="rounded text-[#0B3C9D] focus:ring-[#0B3C9D]"
+                className="w-4 h-4 rounded text-[#0B3C9D] focus:ring-[#0B3C9D]"
               />
               <span className="text-xs font-bold text-slate-700">
-                Mandatory for Application Submission (Blocker)
+                Mandatory for Application Submission (Blocker if missing)
               </span>
             </label>
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+            <label className="block text-xs font-bold text-slate-700 uppercase mb-2">
               Help Text & Submission Guidance
             </label>
             <textarea
-              rows={2}
+              rows={3}
               value={formData.help_text}
               onChange={(e) => setFormData({ ...formData, help_text: e.target.value })}
-              className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm"
+              className="w-full p-3.5 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B3C9D]"
               placeholder="Guidance shown to institute officials on the upload screen..."
             />
-          </div>
-
-          {/* Modal Footer */}
-          <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-200">
-            <button
-              onClick={() => setIsModalOpen(false)}
-              className="px-4 py-2 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-100"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleSave}
-              className="px-5 py-2 rounded-xl text-sm font-bold bg-[#0B3C9D] text-white hover:bg-[#0F2A5C] shadow-sm"
-            >
-              {isEditing ? 'Save Changes' : 'Add to Checklist'}
-            </button>
           </div>
         </div>
       </Modal>

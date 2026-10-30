@@ -38,15 +38,16 @@ export const Drawer: React.FC<DrawerProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex justify-end bg-black/40 backdrop-blur-sm animate-fade-in"
+      className="fixed inset-0 z-[100] flex justify-end bg-black/50 backdrop-blur-xs animate-fade-in"
       role="dialog"
       aria-modal="true"
     >
       <div className="fixed inset-0" onClick={onClose} aria-hidden="true" />
       <div
-        className={`relative z-10 w-full ${width} bg-white h-full shadow-2xl flex flex-col p-6 sm:p-8 overflow-y-auto border-l border-slate-200 animate-slide-left`}
+        className={`relative z-10 w-full ${width} bg-white h-full shadow-2xl flex flex-col border-l border-slate-200 animate-slide-left overflow-hidden`}
       >
-        <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+        {/* Fixed Header */}
+        <div className="shrink-0 px-6 sm:px-8 py-5 border-b border-slate-100 flex items-center justify-between bg-white">
           <div>
             <h3 className="text-xl font-bold text-[#0B3C9D] tracking-tight">{title}</h3>
             {subtitle && <p className="text-xs text-slate-500 mt-0.5">{subtitle}</p>}
@@ -59,7 +60,9 @@ export const Drawer: React.FC<DrawerProps> = ({
             <X size={20} />
           </button>
         </div>
-        <div className="py-6 flex-1 overflow-y-auto">{children}</div>
+
+        {/* Scrollable Body */}
+        <div className="flex-1 overflow-y-auto px-6 sm:px-8 py-6 modal-scroll">{children}</div>
       </div>
     </div>
   );

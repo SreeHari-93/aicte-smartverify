@@ -321,18 +321,18 @@ export const AdminDocumentTypesPage: React.FC = () => {
 
       {/* Table */}
       <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto w-full">
           <table className="w-full text-left text-sm text-slate-700">
             <thead className="bg-slate-50 text-slate-600 font-semibold border-b border-slate-200 uppercase text-xs tracking-wider">
               <tr>
-                <th className="py-3.5 px-4">Type Code</th>
-                <th className="py-3.5 px-4">Display Name</th>
-                <th className="py-3.5 px-4">Issuing Authority</th>
-                <th className="py-3.5 px-4">Statutory Adapter</th>
-                <th className="py-3.5 px-4">Validity</th>
-                <th className="py-3.5 px-4">Classification Keywords</th>
-                <th className="py-3.5 px-4">Status</th>
-                <th className="py-3.5 px-4 text-right">Actions</th>
+                <th className="py-4 px-5">Type Code</th>
+                <th className="py-4 px-5">Display Name</th>
+                <th className="py-4 px-5">Issuing Authority</th>
+                <th className="py-4 px-5">Statutory Adapter</th>
+                <th className="py-4 px-5">Validity</th>
+                <th className="py-4 px-5">Classification Keywords</th>
+                <th className="py-4 px-5">Status</th>
+                <th className="py-4 px-5 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -345,49 +345,49 @@ export const AdminDocumentTypesPage: React.FC = () => {
               ) : (
                 filteredDocTypes.map((dt) => (
                   <tr key={dt.code} className="hover:bg-slate-50/70 transition-colors">
-                    <td className="py-3.5 px-4 font-mono font-bold text-[#0B3C9D] whitespace-nowrap">
+                    <td className="py-4 px-5 font-mono font-bold text-[#0B3C9D] whitespace-nowrap">
                       {dt.code}
                     </td>
-                    <td className="py-3.5 px-4 font-semibold text-[#0F2A5C] max-w-xs truncate">
+                    <td className="py-4 px-5 font-semibold text-[#0F2A5C] max-w-xs truncate">
                       {dt.name}
                     </td>
-                    <td className="py-3.5 px-4 text-xs text-slate-600 max-w-xs truncate">
+                    <td className="py-4 px-5 text-xs text-slate-600 max-w-xs truncate">
                       {dt.issuing_authority || 'Authorized Regulatory Body'}
                     </td>
-                    <td className="py-3.5 px-4 whitespace-nowrap">
+                    <td className="py-4 px-5 whitespace-nowrap">
                       {dt.statutory_verification_applies || dt.verification_method !== 'MANUAL' ? (
-                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
-                          <ShieldCheck size={12} className="text-emerald-600" />
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                          <ShieldCheck size={13} className="text-emerald-600" />
                           <span>{dt.authority_adapter || dt.verification_method}</span>
                         </span>
                       ) : (
                         <span className="text-xs text-slate-400">Manual Scrutiny</span>
                       )}
                     </td>
-                    <td className="py-3.5 px-4 whitespace-nowrap text-xs text-slate-600">
+                    <td className="py-4 px-5 whitespace-nowrap text-xs text-slate-600">
                       {dt.has_expiry ? `${dt.default_validity_months || 12} Months` : 'Lifetime'}
                     </td>
-                    <td className="py-3.5 px-4 max-w-xs">
-                      <div className="flex flex-wrap gap-1">
+                    <td className="py-4 px-5 max-w-xs">
+                      <div className="flex flex-wrap gap-1.5">
                         {(dt.keywords || []).slice(0, 3).map((kw) => (
                           <span
                             key={kw}
-                            className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-mono"
+                            className="text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded font-mono font-medium"
                           >
                             {kw}
                           </span>
                         ))}
                         {(dt.keywords || []).length > 3 && (
-                          <span className="text-[10px] text-slate-400">
+                          <span className="text-xs text-slate-400 font-medium">
                             +{dt.keywords!.length - 3}
                           </span>
                         )}
                       </div>
                     </td>
-                    <td className="py-3.5 px-4 whitespace-nowrap">
+                    <td className="py-4 px-5 whitespace-nowrap">
                       <StatusPill status={dt.is_active ? 'ACTIVE' : 'ARCHIVED'} />
                     </td>
-                    <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                    <td className="py-4 px-5 text-right whitespace-nowrap">
                       <div className="flex items-center justify-end gap-1.5">
                         <button
                           onClick={() => openEditModal(dt)}
@@ -422,12 +422,31 @@ export const AdminDocumentTypesPage: React.FC = () => {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         title={isEditing ? `Edit Document Type: ${selectedCode}` : 'Register New Document Type'}
-        maxWidth="max-w-3xl"
+        subtitle={isEditing ? 'Update taxonomy, classification keywords, or statutory verification adapter' : 'Configure a new document type for institutional application verification'}
+        maxWidth="max-w-[840px]"
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={() => setIsModalOpen(false)}
+              className="h-11 px-5 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-200 transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleSave}
+              className="h-11 px-6 rounded-xl text-sm font-bold bg-[#0B3C9D] text-white hover:bg-[#0F2A5C] shadow-sm transition-colors"
+            >
+              {isEditing ? 'Save Changes' : 'Register Document Type'}
+            </button>
+          </>
+        }
       >
-        <div className="space-y-4 max-h-[75vh] overflow-y-auto pr-2">
-          <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+              <label className="block text-xs font-bold text-slate-700 uppercase mb-2">
                 Document Code *
               </label>
               <input
@@ -436,11 +455,11 @@ export const AdminDocumentTypesPage: React.FC = () => {
                 value={formData.code}
                 onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
                 placeholder="e.g. SOLAR_NOC"
-                className="w-full px-3 py-2 rounded-lg border border-slate-300 font-mono text-sm uppercase disabled:bg-slate-100"
+                className="w-full h-11 px-3.5 rounded-lg border border-slate-300 font-mono text-sm uppercase disabled:bg-slate-100 font-semibold focus:outline-none focus:ring-2 focus:ring-[#0B3C9D]"
               />
             </div>
             <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+              <label className="block text-xs font-bold text-slate-700 uppercase mb-2">
                 Display Name *
               </label>
               <input
@@ -448,14 +467,14 @@ export const AdminDocumentTypesPage: React.FC = () => {
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 placeholder="e.g. Solar Energy Installation NOC"
-                className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm font-semibold"
+                className="w-full h-11 px-3.5 rounded-lg border border-slate-300 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-[#0B3C9D]"
               />
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+              <label className="block text-xs font-bold text-slate-700 uppercase mb-2">
                 Issuing Authority
               </label>
               <input
@@ -463,75 +482,75 @@ export const AdminDocumentTypesPage: React.FC = () => {
                 value={formData.issuing_authority}
                 onChange={(e) => setFormData({ ...formData, issuing_authority: e.target.value })}
                 placeholder="e.g. Ministry of New & Renewable Energy"
-                className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm"
+                className="w-full h-11 px-3.5 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B3C9D]"
               />
             </div>
             <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+              <label className="block text-xs font-bold text-slate-700 uppercase mb-2">
                 Max Upload Size (MB)
               </label>
               <input
                 type="number"
                 value={formData.max_size_mb}
                 onChange={(e) => setFormData({ ...formData, max_size_mb: parseInt(e.target.value) || 10 })}
-                className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm"
+                className="w-full h-11 px-3.5 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B3C9D]"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
-              Description & Purpose
+            <label className="block text-xs font-bold text-slate-700 uppercase mb-2">
+              Description & Regulatory Purpose
             </label>
             <textarea
               rows={2}
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm"
+              className="w-full p-3.5 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B3C9D]"
               placeholder="Regulatory description and instructions for institutes..."
             />
           </div>
 
           {/* Validity & Expiry Settings */}
-          <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
+          <div className="p-5 bg-slate-50/80 rounded-xl border border-slate-200 space-y-4">
             <span className="text-xs font-bold uppercase text-[#0B3C9D] block">
               Validity & Statutory Verification Settings
             </span>
-            <div className="grid grid-cols-2 gap-4">
-              <label className="flex items-center gap-2 cursor-pointer">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
+              <label className="flex items-center gap-2.5 cursor-pointer select-none">
                 <input
                   type="checkbox"
                   checked={formData.has_expiry}
                   onChange={(e) => setFormData({ ...formData, has_expiry: e.target.checked })}
-                  className="rounded text-[#0B3C9D] focus:ring-[#0B3C9D]"
+                  className="w-4 h-4 rounded text-[#0B3C9D] focus:ring-[#0B3C9D]"
                 />
-                <span className="text-xs font-semibold text-slate-700">Has Expiry Date</span>
+                <span className="text-xs font-semibold text-slate-700">Document Has Expiry Date</span>
               </label>
 
               {formData.has_expiry && (
                 <div>
-                  <label className="block text-[11px] text-slate-500 mb-0.5">Default Validity (Months)</label>
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-2">Default Validity (Months)</label>
                   <input
                     type="number"
                     value={formData.default_validity_months}
                     onChange={(e) =>
                       setFormData({ ...formData, default_validity_months: parseInt(e.target.value) || 12 })
                     }
-                    className="w-full px-2 py-1 rounded border border-slate-300 text-xs"
+                    className="w-full h-11 px-3.5 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B3C9D]"
                   />
                 </div>
               )}
             </div>
 
-            <div className="grid grid-cols-2 gap-4 pt-2 border-t border-slate-200">
-              <label className="flex items-center gap-2 cursor-pointer">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-3 border-t border-slate-200 items-center">
+              <label className="flex items-center gap-2.5 cursor-pointer select-none">
                 <input
                   type="checkbox"
                   checked={formData.statutory_verification_applies}
                   onChange={(e) =>
                     setFormData({ ...formData, statutory_verification_applies: e.target.checked })
                   }
-                  className="rounded text-[#0B3C9D] focus:ring-[#0B3C9D]"
+                  className="w-4 h-4 rounded text-[#0B3C9D] focus:ring-[#0B3C9D]"
                 />
                 <span className="text-xs font-semibold text-slate-700">
                   Statutory Automated Verification Applies
@@ -539,7 +558,7 @@ export const AdminDocumentTypesPage: React.FC = () => {
               </label>
 
               <div>
-                <label className="block text-[11px] text-slate-500 mb-0.5">Authority Adapter</label>
+                <label className="block text-xs font-bold text-slate-700 uppercase mb-2">Authority Adapter</label>
                 <select
                   value={formData.authority_adapter}
                   onChange={(e) =>
@@ -549,7 +568,7 @@ export const AdminDocumentTypesPage: React.FC = () => {
                       verification_method: e.target.value === 'MANUAL' ? 'MANUAL' : 'API',
                     })
                   }
-                  className="w-full px-2 py-1.5 rounded border border-slate-300 text-xs"
+                  className="w-full h-11 px-3.5 rounded-lg border border-slate-300 text-sm font-semibold text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-[#0B3C9D]"
                 >
                   {AUTHORITY_ADAPTERS.map((a) => (
                     <option key={a} value={a}>{a}</option>
@@ -560,78 +579,85 @@ export const AdminDocumentTypesPage: React.FC = () => {
           </div>
 
           {/* Classification Keywords */}
-          <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold uppercase text-[#0B3C9D] flex items-center gap-1.5">
-                <Tag size={14} />
+          <div className="p-5 bg-slate-50/80 rounded-xl border border-slate-200 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+              <span className="text-xs font-bold uppercase text-[#0B3C9D] flex items-center gap-2">
+                <Tag size={15} />
                 <span>Classification OCR Keywords</span>
               </span>
-              <span className="text-[11px] text-slate-500">Used by OCR to classify uploaded files</span>
+              <span className="text-xs text-slate-500">Used by OCR to classify uploaded files</span>
             </div>
 
+            {/* Keyword Input & Button aligned on one row */}
             <div className="flex items-center gap-2">
               <input
                 type="text"
-                placeholder="Enter token (e.g. patta, katha, solar, noc)..."
+                placeholder="Enter token (e.g. certificate, clearance, patta, noc)..."
                 value={newKeyword}
                 onChange={(e) => setNewKeyword(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddKeyword())}
-                className="flex-1 px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-mono"
+                className="flex-1 h-11 px-3.5 rounded-lg border border-slate-300 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#0B3C9D]"
               />
               <button
                 type="button"
                 onClick={handleAddKeyword}
-                className="px-3 py-1.5 bg-[#0B3C9D] text-white text-xs font-semibold rounded-lg hover:bg-[#0F2A5C]"
+                className="h-11 px-5 bg-[#0B3C9D] text-white text-xs font-bold rounded-lg hover:bg-[#0F2A5C] shrink-0 transition-colors"
               >
                 Add Keyword
               </button>
             </div>
 
-            <div className="flex flex-wrap gap-1.5 pt-1">
-              {formData.keywords.map((kw) => (
-                <span
-                  key={kw}
-                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white border border-slate-300 text-xs text-[#0F2A5C] font-mono shadow-2xs"
-                >
-                  <span>{kw}</span>
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveKeyword(kw)}
-                    className="text-slate-400 hover:text-red-600"
+            {/* Keyword chips in wrapped flex row with readable spacing */}
+            <div className="flex flex-wrap gap-2 pt-1">
+              {formData.keywords.length === 0 ? (
+                <span className="text-xs text-slate-400 italic">No keywords added yet.</span>
+              ) : (
+                formData.keywords.map((kw) => (
+                  <span
+                    key={kw}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white border border-slate-300 text-xs text-[#0F2A5C] font-mono shadow-2xs font-medium"
                   >
-                    <X size={12} />
-                  </button>
-                </span>
-              ))}
+                    <span>{kw}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveKeyword(kw)}
+                      className="text-slate-400 hover:text-red-600 transition-colors"
+                      title={`Remove ${kw}`}
+                    >
+                      <X size={13} />
+                    </button>
+                  </span>
+                ))
+              )}
             </div>
           </div>
 
           {/* Extraction Schema Fields */}
-          <div className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
-            <span className="text-xs font-bold uppercase text-[#0B3C9D] flex items-center gap-1.5">
-              <Key size={14} />
+          <div className="p-5 bg-slate-50/80 rounded-xl border border-slate-200 space-y-4">
+            <span className="text-xs font-bold uppercase text-[#0B3C9D] flex items-center gap-2">
+              <Key size={15} />
               <span>Required Extraction Schema Fields</span>
             </span>
 
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
               <input
                 type="text"
                 placeholder="Field key (e.g. area_sqm)"
                 value={newFieldKey}
                 onChange={(e) => setNewFieldKey(e.target.value)}
-                className="px-2.5 py-1.5 rounded border border-slate-300 text-xs font-mono"
+                className="h-11 px-3 rounded-lg border border-slate-300 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-[#0B3C9D]"
               />
               <input
                 type="text"
                 placeholder="Label (e.g. Land Area in Sqm)"
                 value={newFieldLabel}
                 onChange={(e) => setNewFieldLabel(e.target.value)}
-                className="px-2.5 py-1.5 rounded border border-slate-300 text-xs"
+                className="h-11 px-3 rounded-lg border border-slate-300 text-xs focus:outline-none focus:ring-2 focus:ring-[#0B3C9D]"
               />
               <select
                 value={newFieldType}
                 onChange={(e) => setNewFieldType(e.target.value)}
-                className="px-2.5 py-1.5 rounded border border-slate-300 text-xs"
+                className="h-11 px-3 rounded-lg border border-slate-300 text-xs font-semibold bg-white focus:outline-none focus:ring-2 focus:ring-[#0B3C9D]"
               >
                 <option value="text">text</option>
                 <option value="number">number</option>
@@ -641,49 +667,33 @@ export const AdminDocumentTypesPage: React.FC = () => {
               <button
                 type="button"
                 onClick={handleAddField}
-                className="px-3 py-1.5 bg-[#0B3C9D] text-white text-xs font-bold rounded hover:bg-[#0F2A5C]"
+                className="h-11 px-4 bg-[#0B3C9D] text-white text-xs font-bold rounded-lg hover:bg-[#0F2A5C] transition-colors"
               >
                 Add Field
               </button>
             </div>
 
-            <div className="space-y-1.5 pt-2">
+            <div className="space-y-2 pt-1">
               {formData.extraction_schema.map((f, idx) => (
                 <div
                   key={f.key + idx}
-                  className="flex items-center justify-between p-2 rounded bg-white border border-slate-200 text-xs font-mono"
+                  className="flex items-center justify-between p-3 rounded-lg bg-white border border-slate-200 text-xs font-mono"
                 >
                   <div className="flex items-center gap-3">
                     <span className="font-bold text-[#0B3C9D]">{f.key}</span>
                     <span className="text-slate-600 font-sans">{f.label}</span>
-                    <span className="bg-slate-100 text-slate-600 px-1.5 rounded text-[10px]">{f.type}</span>
+                    <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded text-[10px] uppercase font-bold">{f.type}</span>
                   </div>
                   <button
                     type="button"
                     onClick={() => handleRemoveField(idx)}
-                    className="text-red-500 hover:text-red-700"
+                    className="p-1 text-slate-400 hover:text-red-600 transition-colors"
                   >
-                    <Trash2 size={13} />
+                    <Trash2 size={14} />
                   </button>
                 </div>
               ))}
             </div>
-          </div>
-
-          {/* Modal Footer */}
-          <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-200">
-            <button
-              onClick={() => setIsModalOpen(false)}
-              className="px-4 py-2 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-100"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleSave}
-              className="px-5 py-2 rounded-xl text-sm font-bold bg-[#0B3C9D] text-white hover:bg-[#0F2A5C] shadow-sm"
-            >
-              {isEditing ? 'Save Document Type' : 'Register Type'}
-            </button>
           </div>
         </div>
       </Modal>
