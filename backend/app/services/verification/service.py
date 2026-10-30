@@ -166,6 +166,13 @@ class VerificationService:
             },
         )
 
+        # Stage 5: Run Anomaly Detection Engine automatically after verification
+        try:
+            from backend.app.services.anomaly.service import AnomalyService
+            AnomalyService.scan_document(db=db, document_id=doc.id, triggered_by=triggered_by)
+        except Exception:
+            pass
+
         return ver_res
 
     @classmethod

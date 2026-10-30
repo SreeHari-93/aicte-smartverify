@@ -37,6 +37,10 @@ from backend.app.services.verification import (
     VerificationService,
     VerificationResponseOut,
 )
+from backend.app.services.anomaly import (
+    AnomalyService,
+    InstituteAnomalyFlagOut,
+)
 from backend.app.api.deps import get_current_user
 
 from backend.app.schemas.institute import (
@@ -1649,4 +1653,84 @@ def mark_all_notifications_read(
     ).update({"is_read": True})
     db.commit()
     return {"message": "All notifications marked as read."}
+
+
+# =========================================================================
+# Stage 5: Anomaly Detection Endpoints (Institute View)
+# =========================================================================
+
+@router.post("/applications/{application_id}/anomaly-scan")
+def run_institute_application_anomaly_scan(
+    application_id: Union[int, str],
+    user: User = Depends(get_current_institute_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Triggers an on-demand anomaly scan across all documents of an application.
+    Enforces institute isolation.
+    """
+    app = None
+    if isinstance(application_id, int) or (isinstance(application_id, str) and application_id.isdigit()):
+        app = db.query(Application).filter(Application.id == int(application_id)).first()
+    if not app:
+        app = db.query(Application).filter(Application.application_id == str(application_id)).first()
+
+    if not app:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Application '{application_id}' not found.",
+        )
+
+    if app.institute_id != user.institute_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Forbidden: Application does not belong to your institute.",
+        )
+
+    run, flags = AnomalyService.scan_application(
+        db=db,
+        application_id=app.id,
+        triggered_by=user.id,
+    )
+
+    sanitized_flags = [
+        InstituteAnomalyFlagOut.model_validate(f) for f in flags
+    ]
+
+    return {
+        "run_id": run.id,
+        "application_id": app.id,
+        "flag_count": len(sanitized_flags),
+        "flags": sanitized_flags,
+        "status": "COMPLETED",
+    }
+
+
+@router.get("/documents/{document_id}/anomalies", response_model=List[InstituteAnomalyFlagOut])
+def get_institute_document_anomalies(
+    document_id: int,
+    user: User = Depends(get_current_institute_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Retrieves preliminary anomaly indicators for a document.
+    Enforces institute isolation.
+    Outputs are preliminary indicators worded as 'needs verification' with NO internal scores.
+    """
+    doc = db.query(Document).filter(Document.id == document_id).first()
+    if not doc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Document with ID {document_id} not found.",
+        )
+
+    if doc.institute_id != user.institute_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Forbidden: Document does not belong to your institute.",
+        )
+
+    flags = AnomalyService.get_flags_for_document(db=db, document_id=doc.id)
+    return [InstituteAnomalyFlagOut.model_validate(f) for f in flags]
+
 

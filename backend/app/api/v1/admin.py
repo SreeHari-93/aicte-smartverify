@@ -1,6 +1,8 @@
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone
+import os
 from fastapi import APIRouter, Depends, HTTPException, Query, status, Response
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
@@ -26,6 +28,11 @@ from backend.app.services.verification import (
     ManualConfirmRequest,
     VerificationResponseOut,
     VerificationQueueItemOut,
+)
+from backend.app.services.anomaly import (
+    AnomalyService,
+    AnomalyFlagOut,
+    AnomalyReviewRequest,
 )
 from backend.app.schemas.institute import (
     ApplicationReadinessResponse,
@@ -1572,6 +1579,123 @@ def manual_confirm_verification(
         manual_reviewed_by=ver_res.manual_reviewed_by,
         manual_reviewed_at=ver_res.manual_reviewed_at,
     )
+
+
+# =========================================================================
+# Stage 5: Anomaly Engine Endpoints (Admin Scrutiny)
+# =========================================================================
+
+@router.get("/anomalies", response_model=List[AnomalyFlagOut])
+def get_admin_anomalies(
+    severity: Optional[str] = Query(None, description="Filter by severity: INFO, LOW, MEDIUM, HIGH"),
+    detector: Optional[str] = Query(None, description="Filter by detector name"),
+    status: Optional[str] = Query(None, description="Filter by review status: OPEN, CONFIRMED_OK, NEEDS_ACTION, DISMISSED"),
+    institute_id: Optional[int] = Query(None, description="Filter by institute ID"),
+    institute: Optional[str] = Query(None, description="Filter by institute code or name"),
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """
+    List all detected preliminary anomaly flags across documents with optional filtering.
+    """
+    resolved_id = institute_id
+    if not resolved_id and institute:
+        inst_obj = (
+            db.query(Institute)
+            .filter((Institute.aicte_institute_id == institute) | (Institute.name.ilike(f"%{institute}%")))
+            .first()
+        )
+        if inst_obj:
+            resolved_id = inst_obj.id
+
+    flags = AnomalyService.get_admin_flags(
+        db=db,
+        severity=severity,
+        detector=detector,
+        status=status,
+        institute_id=resolved_id,
+    )
+    return [AnomalyFlagOut.model_validate(f) for f in flags]
+
+
+@router.get("/anomalies/{flag_id}", response_model=AnomalyFlagOut)
+def get_admin_anomaly_detail(
+    flag_id: int,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """
+    Fetch comprehensive anomaly flag details, including evidence and overlay image references.
+    """
+    from backend.app.models.anomaly import AnomalyFlag
+    flag = db.query(AnomalyFlag).filter(AnomalyFlag.id == flag_id).first()
+    if not flag:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Anomaly flag #{flag_id} not found.",
+        )
+    return AnomalyFlagOut.model_validate(flag)
+
+
+@router.post("/anomalies/{flag_id}/review", response_model=AnomalyFlagOut)
+def review_admin_anomaly_flag(
+    flag_id: int,
+    payload: AnomalyReviewRequest,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """
+    Submit an administrative review determination on an anomaly flag.
+    A non-empty review rationale note is mandatory for audit accountability.
+    """
+    if not payload.note or not payload.note.strip():
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Review note is mandatory for audit accountability.",
+        )
+
+    try:
+        updated_flag = AnomalyService.review_flag(
+            db=db,
+            flag_id=flag_id,
+            status=payload.status,
+            note=payload.note,
+            reviewer_id=user.id,
+        )
+    except ValueError as ve:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(ve),
+        )
+
+    return AnomalyFlagOut.model_validate(updated_flag)
+
+
+@router.get("/anomalies/{flag_id}/overlay")
+def get_anomaly_overlay_image(
+    flag_id: int,
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """
+    Stream the visual heatmap / bounding-box overlay PNG for an anomaly flag.
+    """
+    from backend.app.models.anomaly import AnomalyFlag
+    flag = db.query(AnomalyFlag).filter(AnomalyFlag.id == flag_id).first()
+    if not flag or not flag.overlay_image_path:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No overlay image available for anomaly flag #{flag_id}.",
+        )
+
+    if not os.path.exists(flag.overlay_image_path):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Overlay image file not found on disk.",
+        )
+
+    return FileResponse(flag.overlay_image_path, media_type="image/png")
+
 
 
 

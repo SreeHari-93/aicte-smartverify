@@ -40,6 +40,8 @@ class Document(Base):
     extracted_fields = relationship("ExtractedField", back_populates="document", cascade="all, delete-orphan")
     classification = relationship("DocumentClassification", back_populates="document", uselist=False, cascade="all, delete-orphan")
     verification_results = relationship("VerificationResult", back_populates="document", cascade="all, delete-orphan", order_by="desc(VerificationResult.id)")
+    anomaly_runs = relationship("AnomalyRun", back_populates="document", cascade="all, delete-orphan", order_by="desc(AnomalyRun.id)")
+    anomaly_flags = relationship("AnomalyFlag", back_populates="document", cascade="all, delete-orphan", order_by="desc(AnomalyFlag.id)")
 
     @property
     def latest_verification(self):

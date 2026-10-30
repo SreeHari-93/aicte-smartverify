@@ -30,6 +30,12 @@ from backend.app.models.verification import (
     AuthoritySource,
     MockRegisterEntry,
 )
+from backend.app.models.anomaly import (
+    AnomalyRun,
+    AnomalyFlag,
+    AnomalySeverity,
+    AnomalyReviewStatus,
+)
 
 __all__ = [
     "User",
@@ -66,4 +72,8 @@ __all__ = [
     "VerificationStatus",
     "AuthoritySource",
     "MockRegisterEntry",
+    "AnomalyRun",
+    "AnomalyFlag",
+    "AnomalySeverity",
+    "AnomalyReviewStatus",
 ]

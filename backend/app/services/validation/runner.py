@@ -15,6 +15,7 @@ from backend.app.models.document_classification import DocumentClassification
 from backend.app.models.rule import Rule, RuleSet
 from backend.app.models.validation_run import ValidationRun, ValidationFinding
 from backend.app.models.verification import VerificationResult
+from backend.app.models.anomaly import AnomalyFlag
 from backend.app.models.audit_log import AuditLog
 from backend.app.services.audit_service import AuditService
 from backend.app.services.rule_engine.context import EvaluationContext
@@ -482,6 +483,36 @@ class ValidationRunner:
                         "status": v_status,
                     }],
                     "suggested_action": "Refer to admin verification queue for manual physical verification by the scrutiny committee.",
+                })
+
+        # F. Anomaly Detection Findings (Stage 5)
+        # Severity mapped: HIGH to MAJOR, MEDIUM to MINOR, LOW/INFO to ADVISORY, all status NEEDS_REVIEW, never FAIL
+        for doc in app_docs:
+            doc_flags = (
+                db.query(AnomalyFlag)
+                .filter(
+                    AnomalyFlag.document_id == doc.id,
+                    AnomalyFlag.review_status != "DISMISSED",
+                )
+                .all()
+            )
+            for flag in doc_flags:
+                if flag.severity == "HIGH":
+                    finding_sev = "MAJOR"
+                elif flag.severity == "MEDIUM":
+                    finding_sev = "MINOR"
+                else:
+                    finding_sev = "ADVISORY"
+
+                findings_data.append({
+                    "rule_code": f"ANOMALY_{flag.detector.upper()}_{flag.code}_{flag.id}",
+                    "rule_version": ruleset_version,
+                    "rule_title": f"Potential Anomaly ({flag.detector}): {flag.code}",
+                    "severity": finding_sev,
+                    "status": "NEEDS_REVIEW",
+                    "reason": flag.reason,
+                    "evidence_json": flag.evidence_json if isinstance(flag.evidence_json, list) else [flag.evidence_json],
+                    "suggested_action": flag.recommended_action or "Review document authenticity and verify with primary records.",
                 })
 
         # 6. Compute Counts, Overall Status, and Score Deterministically
