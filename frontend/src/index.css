@@ -87,3 +87,61 @@
   background: #0B3C9D;
 }
 
+/* AICTE TopBar and Modal layout variables */
+:root {
+  --topbar-height: 96px;
+}
+
+/* Modal sizing constraints: strict height calculation to avoid top bar collision */
+.admin-modal-card {
+  height: auto;
+  max-height: calc(100vh - var(--topbar-height, 96px) - 48px);
+}
+@supports (height: 100dvh) {
+  .admin-modal-card {
+    max-height: calc(100dvh - var(--topbar-height, 96px) - 48px);
+  }
+}
+
+/* Right-side drawer offset so drawer header starts cleanly below top bar */
+.admin-drawer-offset {
+  margin-top: var(--topbar-height, 96px);
+  height: calc(100vh - var(--topbar-height, 96px));
+}
+@supports (height: 100dvh) {
+  .admin-drawer-offset {
+    height: calc(100dvh - var(--topbar-height, 96px));
+  }
+}
+
+/* Short screens (height under 700px) responsive spacing */
+@media (max-height: 700px) {
+  .modal-overlay-wrapper {
+    padding-top: calc(var(--topbar-height, 96px) + 8px) !important;
+    padding-bottom: 12px !important;
+  }
+  .admin-modal-card {
+    max-height: calc(100vh - var(--topbar-height, 96px) - 20px) !important;
+  }
+  @supports (height: 100dvh) {
+    .admin-modal-card {
+      max-height: calc(100dvh - var(--topbar-height, 96px) - 20px) !important;
+    }
+  }
+  .modal-body-padding {
+    padding: 1.25rem !important; /* p-5 instead of p-8 (20px) */
+  }
+  .modal-body-padding .space-y-6 > :not([hidden]) ~ :not([hidden]),
+  .modal-body-padding.space-y-6 > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 1rem !important; /* 16px field gap */
+  }
+  .modal-header-padding {
+    padding-top: 0.75rem !important;
+    padding-bottom: 0.75rem !important;
+  }
+  .modal-footer-padding {
+    padding-top: 0.625rem !important;
+    padding-bottom: 0.625rem !important;
+  }
+}
+

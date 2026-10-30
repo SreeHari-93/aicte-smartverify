@@ -85,12 +85,6 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen = false, onCl
             );
           })}
         </nav>
-
-        <div className="px-3 pt-3 border-t border-[#EFE3CF]/80 text-[11px] text-[#0B3C9D]/70 font-medium leading-relaxed">
-          <span>AICTE Problem Statement 26261</span>
-          <br />
-          <span className="text-[10px] text-slate-500">"Rules decide, AI explains, Officials approve."</span>
-        </div>
       </aside>
     </>
   );

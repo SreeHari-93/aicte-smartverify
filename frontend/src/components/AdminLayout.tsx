@@ -30,8 +30,8 @@ export const AdminLayout: React.FC = () => {
             backgroundAttachment: 'fixed',
           }}
         >
-          {/* Soft light overlay (rgba(255,255,255,0.35)) so cards and text stay readable */}
-          <div className="absolute inset-0 bg-white/35 pointer-events-none z-0" />
+          {/* Dark overlay so the building image looks darker and richer rather than washed-out */}
+          <div className="absolute inset-0 bg-black/35 pointer-events-none z-0" />
 
           {/* Page Content Outlet (relative z-10 for cards to float over image) */}
           <div className="relative z-10 max-w-7xl mx-auto w-full">

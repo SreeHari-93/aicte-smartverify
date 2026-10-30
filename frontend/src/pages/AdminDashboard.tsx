@@ -9,7 +9,6 @@ import {
   ListChecks,
   ScrollText,
   ArrowRight,
-  Sparkles,
   Layers,
   Clock,
   AlertTriangle,
@@ -276,17 +275,6 @@ export const AdminDashboard: React.FC = () => {
             <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
           </div>
         </Link>
-      </div>
-
-      {/* 6. Architectural Core & Milestone Notice */}
-      <div className="bg-gradient-to-r from-blue-50/80 via-white to-orange-50/80 rounded-2xl border border-blue-100/80 p-6 sm:p-8">
-        <div className="flex items-center gap-3 mb-2">
-          <Sparkles size={20} className="text-[#0B3C9D]" />
-          <h3 className="text-base font-bold text-[#0B3C9D]">AICTE SmartVerify AI Governance Engine</h3>
-        </div>
-        <p className="text-xs text-slate-600 leading-relaxed max-w-3xl">
-          Core principle: <strong className="text-[#0F2A5C]">"Rules decide, AI explains, Officials approve."</strong> Stage 8-ii establishes officer scrutiny workspaces for external registry verification, non-inflammatory potential anomaly investigation with evidence heatmaps, and institute grievance resolution with automatic notifications.
-        </p>
       </div>
     </div>
   );
