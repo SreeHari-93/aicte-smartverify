@@ -1,0 +1,14 @@
+{
+  "name": "aicte-smartverify-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "npm --prefix frontend run dev",
+    "build": "npm --prefix frontend run build",
+    "preview": "npm --prefix frontend run preview",
+    "start": "npm --prefix frontend run dev",
+    "backend": "backend\\venv\\Scripts\\python -m uvicorn backend.app.main:app --reload --port 8000",
+    "test:backend": "backend\\venv\\Scripts\\pytest -v backend\\tests"
+  }
+}
+

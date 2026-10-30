@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: aicte_db
+    restart: always
+    environment:
+      POSTGRES_USER: aicte_user
+      POSTGRES_PASSWORD: aicte_password
+      POSTGRES_DB: aicte_smartverify
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aicte_user -d aicte_smartverify"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: aicte_backend
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://aicte_user:aicte_password@db:5432/aicte_smartverify
+      SECRET_KEY: ${SECRET_KEY:-aicte-super-secret-key-change-in-production-2026-xyz}
+      ENVIRONMENT: production
+      COOKIE_SECURE: "false"
+      COOKIE_SAMESITE: lax
+      CORS_ORIGINS: "[\"http://localhost:3000\",\"http://localhost:5173\",\"http://127.0.0.1:3000\"]"
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    container_name: aicte_frontend
+    restart: always
+    depends_on:
+      - backend
+    ports:
+      - "3000:80"
+
+volumes:
+  postgres_data:
+

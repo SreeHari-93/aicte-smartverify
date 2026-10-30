@@ -1,0 +1,907 @@
+import hashlib
+import os
+import uuid
+from datetime import datetime, timezone, date
+from typing import Optional, List
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form, status, Response
+from fastapi.responses import FileResponse
+from sqlalchemy.orm import Session
+
+from backend.app.database import get_db
+from backend.app.models.user import User, UserRole
+from backend.app.models.institute import Institute
+from backend.app.models.application import Application
+from backend.app.models.certificate import Certificate, CertificateRenewal
+from backend.app.models.course import Course
+from backend.app.models.accreditation import Accreditation
+from backend.app.models.rule import Rule, RuleSet
+from backend.app.models.document import Document
+from backend.app.models.document_type import DocumentType
+from backend.app.models.application_category import ApplicationCategory
+from backend.app.models.checklist_item import ChecklistItem
+from backend.app.models.complaint import Complaint, ComplaintEvent
+from backend.app.models.notification import Notification
+from backend.app.models.report import Report
+from backend.app.services.audit_service import AuditService
+from backend.app.services.report_service import ReportService
+from backend.app.api.deps import get_current_user
+
+from backend.app.schemas.institute import (
+    InstituteDashboardResponse,
+    StatCount,
+    CertificateListResponse,
+    CertificateItem,
+    CertificateStats,
+    UpcomingExpiryItem,
+    CertificateRenewRequest,
+    ApplicationListResponse,
+    ApplicationItem,
+    ApplicationStats,
+    CreateApplicationDraft,
+    RuleGroup,
+    RuleItem,
+    RuleSummary,
+    RulesResponse,
+    DocumentItem,
+    InstituteChecklistItem,
+    InstituteChecklistResponse,
+    ValidationResponse,
+    ValidationCheckItem,
+    ComplaintItem,
+    CreateComplaintRequest,
+    ReportItem,
+    GenerateReportRequest,
+    NotificationItem,
+)
+
+router = APIRouter(prefix="/institute", tags=["Institute Portal"])
+
+DOCUMENT_STORAGE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../storage/documents"))
+os.makedirs(DOCUMENT_STORAGE_DIR, exist_ok=True)
+
+
+def get_current_institute_user(current_user: User = Depends(get_current_user)) -> User:
+    """Dependency ensuring user is an INSTITUTE user with an assigned institute_id"""
+    if current_user.role != UserRole.INSTITUTE or not current_user.institute_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access forbidden: This resource is restricted to authorized Institute accounts only.",
+        )
+    return current_user
+
+
+# ==============================================================================
+# 1. DASHBOARD ENDPOINT
+# ==============================================================================
+@router.get("/dashboard", response_model=InstituteDashboardResponse)
+def get_dashboard(
+    user: User = Depends(get_current_institute_user),
+    db: Session = Depends(get_db),
+):
+    institute = db.query(Institute).filter(Institute.id == user.institute_id).first()
+    if not institute:
+        raise HTTPException(status_code=404, detail="Institute record not found.")
+
+    # Calculate Application stats
+    apps = db.query(Application).filter(Application.institute_id == user.institute_id).all()
+    filed_count = len(apps)
+    approved_count = sum(1 for a in apps if a.status == "APPROVED")
+    pending_count = sum(1 for a in apps if a.status in ["DRAFT", "SUBMITTED", "UNDER_REVIEW"])
+    rejected_count = sum(1 for a in apps if a.status == "REJECTED")
+
+    # Accreditation
+    accreditation = db.query(Accreditation).filter(Accreditation.institute_id == user.institute_id).first()
+
+    # Courses
+    courses = db.query(Course).filter(Course.institute_id == user.institute_id).all()
+
+    return InstituteDashboardResponse(
+        institute_id=institute.id,
+        aicte_institute_id=institute.aicte_institute_id,
+        name=institute.name,
+        state=institute.state,
+        stats=StatCount(
+            filed=filed_count,
+            approved=approved_count,
+            pending=pending_count,
+            rejected=rejected_count,
+        ),
+        accreditation=accreditation,
+        courses=courses,
+    )
+
+
+# ==============================================================================
+# 2. CERTIFICATE EXPIRY ENDPOINTS
+# ==============================================================================
+@router.get("/certificates", response_model=CertificateListResponse)
+def get_certificates(
+    search: Optional[str] = Query(None),
+    status_filter: Optional[str] = Query(None, alias="status"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=50),
+    user: User = Depends(get_current_institute_user),
+    db: Session = Depends(get_db),
+):
+    query = db.query(Certificate).filter(Certificate.institute_id == user.institute_id)
+    all_certs = query.all()
+
+    today = date.today()
+    # Compute stats across all certificates for this institute
+    total_count = len(all_certs)
+    expiring_soon_count = 0
+    expired_count = 0
+    renewed_or_valid_count = 0
+
+    computed_list = []
+    for c in all_certs:
+        st, days = c.compute_status(today)
+        if st == "Expiring Soon":
+            expiring_soon_count += 1
+        elif st == "Expired":
+            expired_count += 1
+        else:
+            renewed_or_valid_count += 1
+
+        computed_item = CertificateItem(
+            id=c.id,
+            application_id=c.application_id,
+            name=c.name,
+            certificate_id=c.certificate_id,
+            issue_date=c.issue_date,
+            expiry_date=c.expiry_date,
+            document_id=c.document_id,
+            status=st,
+            days_until_expiry=days,
+        )
+
+        # Apply filtering
+        matches_search = True
+        if search:
+            s = search.lower()
+            matches_search = (
+                s in c.name.lower()
+                or s in c.certificate_id.lower()
+                or (c.application_id and s in c.application_id.lower())
+            )
+
+        matches_status = True
+        if status_filter and status_filter.lower() != "all":
+            matches_status = st.lower() == status_filter.lower()
+
+        if matches_search and matches_status:
+            computed_list.append(computed_item)
+
+    # Sort soonest expiring first
+    computed_list.sort(key=lambda x: x.days_until_expiry)
+
+    # Paginate
+    total_filtered = len(computed_list)
+    start = (page - 1) * page_size
+    paged_items = computed_list[start : start + page_size]
+
+    return CertificateListResponse(
+        items=paged_items,
+        total=total_filtered,
+        page=page,
+        page_size=page_size,
+        stats=CertificateStats(
+            total=total_count,
+            expiring_soon=expiring_soon_count,
+            expired=expired_count,
+            renewed=renewed_or_valid_count,
+        ),
+    )
+
+
+@router.get("/certificates/upcoming", response_model=List[UpcomingExpiryItem])
+def get_upcoming_expiries(
+    limit: int = Query(6, ge=1, le=20),
+    user: User = Depends(get_current_institute_user),
+    db: Session = Depends(get_db),
+):
+    today = date.today()
+    certs = db.query(Certificate).filter(Certificate.institute_id == user.institute_id).all()
+
+    # Filter for future/upcoming expiries and sort soonest first
+    upcoming = []
+    for c in certs:
+        st, days = c.compute_status(today)
+        if days >= 0:
+            upcoming.append(
+                UpcomingExpiryItem(
+                    id=c.id,
+                    name=c.name,
+                    certificate_id=c.certificate_id,
+                    expiry_date=c.expiry_date,
+                    days_until_expiry=days,
+                    day=c.expiry_date.day,
+                    month_name=c.expiry_date.strftime("%b"),
+                    year=c.expiry_date.year,
+                )
+            )
+
+    upcoming.sort(key=lambda x: x.days_until_expiry)
+    return upcoming[:limit]
+
+
+@router.post("/certificates/{certificate_id}/renew", status_code=status.HTTP_201_CREATED)
+def renew_certificate(
+    certificate_id: int,
+    req: CertificateRenewRequest,
+    user: User = Depends(get_current_institute_user),
+    db: Session = Depends(get_db),
+):
+    cert = (
+        db.query(Certificate)
+        .filter(Certificate.id == certificate_id, Certificate.institute_id == user.institute_id)
+        .first()
+    )
+    if not cert:
+        raise HTTPException(status_code=404, detail="Certificate not found or not owned by your institute.")
+
+    if req.new_expiry_date <= req.new_issue_date:
+        raise HTTPException(status_code=400, detail="New expiry date must be strictly after the issue date.")
+
+    renewal = CertificateRenewal(
+        certificate_id=cert.id,
+        institute_id=user.institute_id,
+        new_issue_date=req.new_issue_date,
+        new_expiry_date=req.new_expiry_date,
+        document_id=req.document_id,
+        status="PENDING_VERIFICATION",
+    )
+    db.add(renewal)
+
+    # Update certificate dates
+    cert.issue_date = req.new_issue_date
+    cert.expiry_date = req.new_expiry_date
+    if req.document_id:
+        cert.document_id = req.document_id
+
+    db.commit()
+
+    AuditService.log_event(
+        db=db,
+        action="CERTIFICATE_RENEWAL_REQUEST",
+        user_id=user.id,
+        role=user.role,
+        reason=f"Submitted renewal for certificate {cert.certificate_id} ({cert.name})",
+    )
+
+    return {"message": "Certificate renewal request submitted successfully.", "renewal_id": renewal.id}
+
+
+# ==============================================================================
+# 3. APPLICATIONS ENDPOINTS
+# ==============================================================================
+@router.get("/applications", response_model=ApplicationListResponse)
+def get_applications(
+    user: User = Depends(get_current_institute_user),
+    db: Session = Depends(get_db),
+):
+    apps = (
+        db.query(Application)
+        .filter(Application.institute_id == user.institute_id)
+        .order_by(Application.created_at.desc())
+        .all()
+    )
+
+    stats = ApplicationStats(
+        draft=sum(1 for a in apps if a.status == "DRAFT"),
+        submitted=sum(1 for a in apps if a.status == "SUBMITTED"),
+        under_review=sum(1 for a in apps if a.status == "UNDER_REVIEW"),
+        approved=sum(1 for a in apps if a.status == "APPROVED"),
+        rejected=sum(1 for a in apps if a.status == "REJECTED"),
+        total=len(apps),
+    )
+
+    return ApplicationListResponse(items=apps, stats=stats)
+
+
+@router.post("/applications", status_code=status.HTTP_201_CREATED)
+def create_application_draft(
+    payload: CreateApplicationDraft,
+    user: User = Depends(get_current_institute_user),
+    db: Session = Depends(get_db),
+):
+    app_ref = f"APP-2026-{uuid.uuid4().hex[:5].upper()}"
+
+    new_app = Application(
+        institute_id=user.institute_id,
+        application_id=app_ref,
+        category=payload.category,
+        academic_year=payload.academic_year,
+        programme=payload.programme,
+        status="DRAFT",
+        filed_on=None,
+    )
+    db.add(new_app)
+    db.commit()
+    db.refresh(new_app)
+
+    AuditService.log_event(
+        db=db,
+        action="APPLICATION_DRAFT_CREATED",
+        user_id=user.id,
+        role=user.role,
+        reason=f"Draft application created: {app_ref} ({payload.category})",
+    )
+
+    return {"message": "Application draft created successfully.", "application": new_app}
+
+
+# ==============================================================================
+# 4. RULES ENDPOINT
+# ==============================================================================
+@router.get("/rules", response_model=RulesResponse)
+def get_rules(
+    q: Optional[str] = Query(None, description="Search term for rule code, title, description, or handbook reference"),
+    search: Optional[str] = Query(None, description="Legacy search parameter"),
+    category: Optional[str] = Query(None, description="Filter by category"),
+    type: Optional[str] = Query(None, description="Filter by rule type: ALL | MANDATORY | ADVISORY"),
+    sort: Optional[str] = Query("rule_code", description="Sort order: rule_code | recent"),
+    user: User = Depends(get_current_institute_user),
+    db: Session = Depends(get_db),
+):
+    # 1. Global counts for Summary Strip and Category Chips
+    all_db_rules = db.query(Rule).all()
+    total_count = len(all_db_rules)
+    mandatory_total = sum(1 for r in all_db_rules if (r.rule_type == "MANDATORY" or r.is_mandatory))
+    advisory_total = sum(1 for r in all_db_rules if r.rule_type == "ADVISORY")
+    
+    category_counts = {}
+    for r in all_db_rules:
+        category_counts[r.category] = category_counts.get(r.category, 0) + 1
+
+    summary = RuleSummary(
+        total=total_count,
+        mandatory=mandatory_total,
+        advisory=advisory_total,
+        categories_count=len(category_counts),
+        category_counts=category_counts,
+    )
+
+    # 2. Filtered Query
+    query = db.query(Rule)
+    term = q if q is not None else search
+    if term and term.strip():
+        s = f"%{term.strip()}%"
+        query = query.filter(
+            (Rule.rule_code.ilike(s))
+            | (Rule.title.ilike(s))
+            | (Rule.description.ilike(s))
+            | (Rule.handbook_reference.ilike(s))
+        )
+
+    if category and category.strip() and category.strip().lower() != "all":
+        query = query.filter(Rule.category == category.strip())
+
+    if type and type.strip() and type.strip().upper() in ["MANDATORY", "ADVISORY"]:
+        query = query.filter(Rule.rule_type == type.strip().upper())
+
+    # Sort
+    if sort in ["recent", "updated_at"]:
+        query = query.order_by(Rule.category, Rule.updated_at.desc(), Rule.rule_code.asc())
+    else:
+        query = query.order_by(Rule.category, Rule.rule_code.asc())
+
+    filtered_rules = query.all()
+
+    # 3. Group by Category
+    groups_dict = {}
+    for r in filtered_rules:
+        if r.category not in groups_dict:
+            groups_dict[r.category] = []
+        groups_dict[r.category].append(r)
+
+    result_groups = []
+    for cat, rules in groups_dict.items():
+        mand_count = sum(1 for r in rules if (r.rule_type == "MANDATORY" or r.is_mandatory))
+        adv_count = sum(1 for r in rules if r.rule_type == "ADVISORY")
+        result_groups.append(
+            RuleGroup(
+                category=cat,
+                total_count=len(rules),
+                mandatory_count=mand_count,
+                advisory_count=adv_count,
+                rules=rules,
+            )
+        )
+
+    return RulesResponse(summary=summary, groups=result_groups)
+
+
+# ==============================================================================
+# 5. UPLOAD & DOCUMENT MANAGEMENT ENDPOINTS
+# ==============================================================================
+MAGIC_BYTES = {
+    "application/pdf": b"%PDF",
+    "image/jpeg": b"\xff\xd8\xff",
+    "image/png": b"\x89PNG\r\n\x1a\n",
+}
+
+
+@router.post("/documents", response_model=DocumentItem, status_code=status.HTTP_201_CREATED)
+async def upload_document(
+    file: UploadFile = File(...),
+    application_id: Optional[int] = Form(None),
+    document_type_code: Optional[str] = Form(None),
+    user: User = Depends(get_current_institute_user),
+    db: Session = Depends(get_db),
+):
+    # Max file size limit from DocumentType if available
+    content = await file.read()
+    file_size = len(content)
+
+    doc_type_code_clean = document_type_code.strip().upper() if document_type_code else None
+    max_limit_mb = 10
+    if doc_type_code_clean:
+        dt = db.query(DocumentType).filter(DocumentType.code == doc_type_code_clean).first()
+        if dt and dt.max_size_mb:
+            max_limit_mb = dt.max_size_mb
+
+    if file_size > max_limit_mb * 1024 * 1024:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"File size exceeds the {max_limit_mb} MB limit.",
+        )
+
+    # MIME Type and Magic Bytes validation
+    mime = file.content_type or ""
+    is_valid_magic = False
+    for expected_mime, magic in MAGIC_BYTES.items():
+        if mime == expected_mime and content.startswith(magic):
+            is_valid_magic = True
+            break
+        # Also handle image/jpeg variants (image/jpg)
+        if mime in ["image/jpeg", "image/jpg"] and content.startswith(b"\xff\xd8\xff"):
+            is_valid_magic = True
+            mime = "image/jpeg"
+            break
+
+    if not is_valid_magic:
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail="Invalid file format or corrupted header. Only authentic PDF, JPG, and PNG files are accepted.",
+        )
+
+    # Compute SHA-256 hash
+    sha256 = hashlib.sha256(content).hexdigest()
+
+    # Store outside web root with randomized UUID name
+    ext = os.path.splitext(file.filename)[1].lower() or ".bin"
+    stored_name = f"{uuid.uuid4().hex}{ext}"
+    saved_path = os.path.join(DOCUMENT_STORAGE_DIR, stored_name)
+
+    with open(saved_path, "wb") as f:
+        f.write(content)
+
+    doc = Document(
+        institute_id=user.institute_id,
+        application_id=application_id,
+        document_type_code=doc_type_code_clean,
+        original_filename=file.filename,
+        stored_filename=stored_name,
+        file_path=saved_path,
+        file_size=file_size,
+        mime_type=mime,
+        sha256_hash=sha256,
+        status="Uploaded",
+    )
+    db.add(doc)
+    db.commit()
+    db.refresh(doc)
+
+    AuditService.log_event(
+        db=db,
+        action="DOCUMENT_UPLOADED",
+        user_id=user.id,
+        role=user.role,
+        reason=f"Uploaded file: {file.filename} ({file_size} bytes, SHA256: {sha256[:12]}..., type: {doc_type_code_clean or 'unspecified'})",
+    )
+
+    return doc
+
+
+@router.get("/checklist", response_model=InstituteChecklistResponse)
+def get_institute_checklist(
+    category: str = Query("EOA"),
+    application_id: Optional[int] = Query(None),
+    user: User = Depends(get_current_institute_user),
+    db: Session = Depends(get_db),
+):
+    cat = db.query(ApplicationCategory).filter(ApplicationCategory.code == category.upper()).first()
+    if not cat:
+        cat = db.query(ApplicationCategory).first()
+        if not cat:
+            return InstituteChecklistResponse(
+                category_code=category.upper(),
+                category_name=category.upper(),
+                total_required=0,
+                uploaded_count=0,
+                missing_count=0,
+                items=[],
+            )
+
+    items = (
+        db.query(ChecklistItem)
+        .filter(ChecklistItem.category_id == cat.id, ChecklistItem.is_active == True)
+        .order_by(ChecklistItem.display_order.asc(), ChecklistItem.id.asc())
+        .all()
+    )
+
+    # Fetch existing documents uploaded by this institute
+    doc_query = db.query(Document).filter(Document.institute_id == user.institute_id)
+    if application_id:
+        doc_query = doc_query.filter(
+            (Document.application_id == application_id) | (Document.application_id == None)
+        )
+    uploaded_docs = doc_query.order_by(Document.created_at.desc()).all()
+
+    uploaded_by_type = {}
+    for d in uploaded_docs:
+        if d.document_type_code and d.document_type_code not in uploaded_by_type:
+            uploaded_by_type[d.document_type_code] = d
+
+    checklist_results = []
+    uploaded_count = 0
+    missing_count = 0
+
+    for ci in items:
+        dt = ci.document_type
+        if not dt or not dt.is_active:
+            continue
+
+        matched_doc = uploaded_by_type.get(dt.code)
+        if matched_doc:
+            status_val = "uploaded"
+            uploaded_count += 1
+            doc_id = matched_doc.id
+            doc_name = matched_doc.original_filename
+            up_at = matched_doc.created_at
+        else:
+            status_val = "missing"
+            if ci.is_mandatory:
+                missing_count += 1
+            doc_id = None
+            doc_name = None
+            up_at = None
+
+        checklist_results.append(
+            InstituteChecklistItem(
+                id=ci.id,
+                document_type_code=dt.code,
+                document_type_name=dt.name,
+                description=dt.description,
+                issuing_authority=dt.issuing_authority,
+                is_mandatory=ci.is_mandatory,
+                status=status_val,
+                uploaded_document_id=doc_id,
+                uploaded_filename=doc_name,
+                uploaded_at=up_at,
+                min_validity_days_remaining=ci.min_validity_days_remaining,
+                help_text=ci.help_text,
+            )
+        )
+
+    return InstituteChecklistResponse(
+        category_code=cat.code,
+        category_name=cat.name,
+        total_required=sum(1 for i in checklist_results if i.is_mandatory),
+        uploaded_count=uploaded_count,
+        missing_count=missing_count,
+        items=checklist_results,
+    )
+
+
+@router.get("/documents", response_model=List[DocumentItem])
+def get_documents(
+    user: User = Depends(get_current_institute_user),
+    db: Session = Depends(get_db),
+):
+    return (
+        db.query(Document)
+        .filter(Document.institute_id == user.institute_id)
+        .order_by(Document.created_at.desc())
+        .all()
+    )
+
+
+@router.get("/documents/{document_id}/download")
+def download_document(
+    document_id: int,
+    user: User = Depends(get_current_institute_user),
+    db: Session = Depends(get_db),
+):
+    doc = (
+        db.query(Document)
+        .filter(Document.id == document_id, Document.institute_id == user.institute_id)
+        .first()
+    )
+    if not doc or not os.path.exists(doc.file_path):
+        raise HTTPException(status_code=404, detail="Document not found or inaccessible.")
+
+    AuditService.log_event(
+        db=db,
+        action="DOCUMENT_DOWNLOADED",
+        user_id=user.id,
+        role=user.role,
+        reason=f"Downloaded document: {doc.original_filename} (ID: {doc.id})",
+    )
+
+    return FileResponse(
+        path=doc.file_path,
+        media_type=doc.mime_type,
+        filename=doc.original_filename,
+    )
+
+
+@router.delete("/documents/{document_id}", status_code=status.HTTP_200_OK)
+def delete_document(
+    document_id: int,
+    user: User = Depends(get_current_institute_user),
+    db: Session = Depends(get_db),
+):
+    doc = (
+        db.query(Document)
+        .filter(Document.id == document_id, Document.institute_id == user.institute_id)
+        .first()
+    )
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found or not owned by your institute.")
+
+    # Remove file from disk
+    if os.path.exists(doc.file_path):
+        try:
+            os.remove(doc.file_path)
+        except OSError:
+            pass
+
+    filename = doc.original_filename
+    db.delete(doc)
+    db.commit()
+
+    AuditService.log_event(
+        db=db,
+        action="DOCUMENT_DELETED",
+        user_id=user.id,
+        role=user.role,
+        reason=f"Deleted document: {filename} (ID: {document_id})",
+    )
+
+    return {"message": f"Document '{filename}' deleted successfully."}
+
+
+# ==============================================================================
+# 6. VALIDATION STUB ENDPOINT
+# ==============================================================================
+@router.get("/validation/{application_id}", response_model=ValidationResponse)
+def get_validation_report(
+    application_id: str,
+    user: User = Depends(get_current_institute_user),
+    db: Session = Depends(get_db),
+):
+    # Verify application ownership
+    app = (
+        db.query(Application)
+        .filter(Application.application_id == application_id, Application.institute_id == user.institute_id)
+        .first()
+    )
+    if not app:
+        raise HTTPException(status_code=404, detail="Application not found or inaccessible.")
+
+    # Return synthetic demo checks for Step 2 visual layout
+    checks = [
+        ValidationCheckItem(
+            check="Land & Building Title Deed Verification",
+            result="Pass",
+            evidence="Registered Sale Deed No. 4128/2004 verified with Sub-Registrar digital index.",
+            suggested_action="No action required. Land ownership criteria satisfied.",
+        ),
+        ValidationCheckItem(
+            check="Structural Stability & PWD Certificate",
+            result="Pass",
+            evidence="Executive Engineer Certificate issued 12-04-2024. Valid for academic year 2026-27.",
+            suggested_action="Maintain physical copy for spot scrutiny committee.",
+        ),
+        ValidationCheckItem(
+            check="Fire & Life Safety NOC Expiry Risk",
+            result="Warning",
+            evidence="Fire Department NOC No. FS/2024/991 expires on 15-11-2026 (within 16 days).",
+            suggested_action="Submit renewed Fire NOC application receipt to avoid EoA blockage.",
+        ),
+        ValidationCheckItem(
+            check="Cadre-wise Faculty-Student Ratio (FSR 1:20)",
+            result="Pass",
+            evidence="Total enrolled students: 3,420; Verified faculty count: 186. Calculated FSR = 1:18.38.",
+            suggested_action="Norm met. Ensure biometric attendance records remain synchronized.",
+        ),
+        ValidationCheckItem(
+            check="Administrative Barrier-Free & Ramp Access",
+            result="Fail",
+            evidence="Building block C barrier-free lift compliance certificate omitted from annexure.",
+            suggested_action="Upload CPWD-compliant lift inspection certificate in Upload tab.",
+        ),
+    ]
+
+    return ValidationResponse(
+        application_id=application_id,
+        status="UNDER_SCRUTINY",
+        checks=checks,
+    )
+
+
+# ==============================================================================
+# 7. COMPLAINTS & TICKETING ENDPOINTS
+# ==============================================================================
+@router.get("/complaints", response_model=List[ComplaintItem])
+def get_complaints(
+    user: User = Depends(get_current_institute_user),
+    db: Session = Depends(get_db),
+):
+    return (
+        db.query(Complaint)
+        .filter(Complaint.institute_id == user.institute_id)
+        .order_by(Complaint.created_at.desc())
+        .all()
+    )
+
+
+@router.post("/complaints", status_code=status.HTTP_201_CREATED)
+def raise_complaint(
+    payload: CreateComplaintRequest,
+    user: User = Depends(get_current_institute_user),
+    db: Session = Depends(get_db),
+):
+    ticket_id = f"TCK-2026-{uuid.uuid4().hex[:5].upper()}"
+
+    complaint = Complaint(
+        ticket_id=ticket_id,
+        institute_id=user.institute_id,
+        application_id=payload.related_application_id,
+        category=payload.category,
+        subject=payload.subject,
+        description=payload.description,
+        attachment_document_id=payload.attachment_document_id,
+        status="Open",
+    )
+    db.add(complaint)
+    db.commit()
+    db.refresh(complaint)
+
+    # Initial event
+    event = ComplaintEvent(
+        complaint_id=complaint.id,
+        action="Ticket Created",
+        notes=f"Complaint lodged by Institute under category '{payload.category}'.",
+        created_by="Institute Officer",
+    )
+    db.add(event)
+    db.commit()
+
+    AuditService.log_event(
+        db=db,
+        action="COMPLAINT_LODGED",
+        user_id=user.id,
+        role=user.role,
+        reason=f"Raised ticket {ticket_id}: {payload.subject}",
+    )
+
+    return {"message": "Complaint registered successfully.", "ticket_id": ticket_id}
+
+
+# ==============================================================================
+# 8. REPORTS ENDPOINTS
+# ==============================================================================
+@router.post("/reports/generate", response_model=ReportItem, status_code=status.HTTP_201_CREATED)
+def generate_report(
+    req: GenerateReportRequest,
+    user: User = Depends(get_current_institute_user),
+    db: Session = Depends(get_db),
+):
+    report_record = ReportService.generate_report(
+        db=db,
+        institute_id=user.institute_id,
+        report_type=req.report_type,
+        report_format=req.format,
+        date_range=req.date_range,
+    )
+
+    AuditService.log_event(
+        db=db,
+        action="REPORT_GENERATED",
+        user_id=user.id,
+        role=user.role,
+        reason=f"Generated {req.format} report for '{req.report_type}' ({req.date_range})",
+    )
+
+    return report_record
+
+
+@router.get("/reports", response_model=List[ReportItem])
+def get_reports(
+    user: User = Depends(get_current_institute_user),
+    db: Session = Depends(get_db),
+):
+    return (
+        db.query(Report)
+        .filter(Report.institute_id == user.institute_id)
+        .order_by(Report.created_at.desc())
+        .all()
+    )
+
+
+@router.get("/reports/{report_id}/download")
+def download_report(
+    report_id: int,
+    user: User = Depends(get_current_institute_user),
+    db: Session = Depends(get_db),
+):
+    rep = (
+        db.query(Report)
+        .filter(Report.id == report_id, Report.institute_id == user.institute_id)
+        .first()
+    )
+    if not rep or not os.path.exists(rep.file_path):
+        raise HTTPException(status_code=404, detail="Report not found on server.")
+
+    AuditService.log_event(
+        db=db,
+        action="REPORT_DOWNLOADED",
+        user_id=user.id,
+        role=user.role,
+        reason=f"Downloaded report file: {rep.filename}",
+    )
+
+    media_type = "application/pdf" if rep.format == "PDF" else "text/csv"
+    return FileResponse(path=rep.file_path, media_type=media_type, filename=rep.filename)
+
+
+# ==============================================================================
+# 9. NOTIFICATIONS ENDPOINTS
+# ==============================================================================
+@router.get("/notifications")
+def get_notifications(
+    user: User = Depends(get_current_institute_user),
+    db: Session = Depends(get_db),
+):
+    items = (
+        db.query(Notification)
+        .filter(Notification.institute_id == user.institute_id)
+        .order_by(Notification.created_at.desc())
+        .all()
+    )
+    unread_count = sum(1 for n in items if not n.is_read)
+    return {"items": items, "unread_count": unread_count}
+
+
+@router.patch("/notifications/{notification_id}/read")
+def mark_notification_read(
+    notification_id: int,
+    user: User = Depends(get_current_institute_user),
+    db: Session = Depends(get_db),
+):
+    n = (
+        db.query(Notification)
+        .filter(Notification.id == notification_id, Notification.institute_id == user.institute_id)
+        .first()
+    )
+    if n:
+        n.is_read = True
+        db.commit()
+    return {"message": "Notification marked as read."}
+
+
+@router.patch("/notifications/read-all")
+def mark_all_notifications_read(
+    user: User = Depends(get_current_institute_user),
+    db: Session = Depends(get_db),
+):
+    db.query(Notification).filter(
+        Notification.institute_id == user.institute_id,
+        Notification.is_read == False,
+    ).update({"is_read": True})
+    db.commit()
+    return {"message": "All notifications marked as read."}
+
