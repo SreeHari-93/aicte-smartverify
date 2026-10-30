@@ -41,6 +41,12 @@ class Settings(BaseSettings):
         "ADVISORY": 0.0,
     }
 
+    # Explainer & LLM Settings
+    ANTHROPIC_API_KEY: str = ""
+    EXPLAINER_MODEL: str = "claude-3-7-sonnet-20250219"
+    EXPLAINER_TIMEOUT_SECONDS: int = 20
+    EXPLAINER_CIRCUIT_BREAKER_FAILURES: int = 3
+
     # Cookies
     COOKIE_SECURE: bool = False  # Set to True in HTTPS production
     COOKIE_SAMESITE: str = "lax"  # "strict" or "lax"

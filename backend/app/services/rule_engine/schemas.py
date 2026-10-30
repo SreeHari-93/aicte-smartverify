@@ -79,6 +79,9 @@ class CountAtLeastDef(BaseRuleDef):
                 data["min"] = data["min_count"]
             elif "min" in data and "min_count" not in data:
                 data["min_count"] = data["min"]
+            elif "value" in data and "min_count" not in data and "min" not in data and isinstance(data["value"], (int, float)):
+                data["min_count"] = int(data["value"])
+                data["min"] = int(data["value"])
         return data
 
 
@@ -198,6 +201,15 @@ def validate_rule_definition(definition_data: dict) -> RuleDefUnion:
     rule_type = definition_data.get("type")
     if not rule_type:
         raise ValueError("Missing required 'type' field in rule definition.")
+
+    type_aliases = {
+        "THRESHOLD": "NUMERIC_THRESHOLD",
+        "COUNT": "COUNT_AT_LEAST",
+        "EXTERNAL_VERIFY": "EXTERNAL_VERIFICATION",
+    }
+    if rule_type in type_aliases:
+        rule_type = type_aliases[rule_type]
+        definition_data["type"] = rule_type
 
     type_mapping = {
         "DOCUMENT_REQUIRED": DocumentRequiredDef,

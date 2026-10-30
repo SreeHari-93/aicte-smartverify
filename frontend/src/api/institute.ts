@@ -476,6 +476,7 @@ export const instituteApi = {
     report_type: string;
     format: string;
     date_range: string;
+    application_id?: string;
   }): Promise<ReportItem> => {
     const res = await apiClient.post<ReportItem>('/api/institute/reports/generate', payload);
     return res.data;
@@ -519,4 +520,42 @@ export const instituteApi = {
     const res = await apiClient.get<ApplicationReadinessData>(`/api/institute/applications/${appId}/readiness`);
     return res.data;
   },
+
+  getWhyFailed: async (appId: string | number, lang: 'en' | 'hi' = 'en'): Promise<WhyFailedData> => {
+    const res = await apiClient.get<WhyFailedData>(`/api/institute/applications/${appId}/why-failed?lang=${lang}`);
+    return res.data;
+  },
 };
+
+export interface RootCauseItem {
+  cause_code: string;
+  headline: string;
+  affected_rule_codes: string[];
+  severity: string;
+  evidence: Array<Record<string, any>>;
+  fixable_by_institute: boolean;
+  ordered_suggested_actions: string[];
+  needs_official_review: boolean;
+  finding_ids: number[];
+}
+
+export interface HowToFixItem {
+  step: string;
+  effort: string;
+}
+
+export interface WhyFailedData {
+  headline: string;
+  plain_summary: string;
+  root_causes: RootCauseItem[];
+  how_to_fix: HowToFixItem[];
+  reasons: Array<{
+    cause_code: string;
+    explanation: string;
+    finding_codes: string[];
+  }>;
+  what_officials_will_review?: string;
+  disclaimer: string;
+  lang: string;
+}
+

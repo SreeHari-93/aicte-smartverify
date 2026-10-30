@@ -1,28 +1,39 @@
 from typing import List, Optional, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, status, Response
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 
 from backend.app.database import get_db
 from backend.app.models.user import User
+from backend.app.models.institute import Institute
 from backend.app.models.application import Application
 from backend.app.models.rule import Rule, RuleVersion, RuleSet, RuleChangeRequest
 from backend.app.models.document_type import DocumentType
 from backend.app.models.application_category import ApplicationCategory
 from backend.app.models.checklist_item import ChecklistItem
 from backend.app.models.audit_log import AuditLog
-from backend.app.models.validation_run import ValidationRun, ValidationFinding
+from backend.app.models.validation_run import ValidationRun, ValidationFinding, FindingNote
 from backend.app.services.audit_service import AuditService
 from backend.app.services.rule_engine.schemas import RuleDefinition
 from backend.app.services.rule_engine.engine import RuleEngine
 from backend.app.services.document_pipeline.readiness import ReadinessService
 from backend.app.services.validation.runner import ValidationRunner
+from backend.app.services.explainer.root_cause import RootCauseAnalyzer
+from backend.app.services.explainer.narrator import ExplainerNarrator
 from backend.app.schemas.institute import (
     ApplicationReadinessResponse,
     DuplicateWarningOut,
     ValidationFindingOut,
     ValidationRunDiffOut,
     ValidationRunResponse,
+    AdminWhyFailedResponse,
+    RootCauseOut,
+    HowToFixItem,
+    WhyFailedReasonOut,
+    FindingNoteCreateRequest,
+    FindingNoteResponse,
+    AssessmentStatsResponse,
 )
 from backend.app.config import settings
 from backend.app.api.deps import require_role
@@ -1159,5 +1170,334 @@ def get_admin_application_validation(
         findings=findings_out,
         diff=diff_out,
     )
+
+
+# =====================================================================
+# 11. Explainer & Scrutiny Note/Waiver Endpoints
+# =====================================================================
+
+@router.get("/applications/{application_id}/why-failed", response_model=AdminWhyFailedResponse)
+def get_admin_application_why_failed(
+    application_id: str,
+    lang: str = Query("en", pattern="^(en|hi)$"),
+    current_user: User = Depends(require_admin_or_reviewer),
+    db: Session = Depends(get_db),
+):
+    """
+    Returns the root-cause failure explanation plus internals (model, prompt hash,
+    raw root causes, waiver status) for administrative scrutiny.
+    """
+    app_record = None
+    app_str = str(application_id).strip()
+    if app_str.isdigit():
+        app_record = db.query(Application).filter(Application.id == int(app_str)).first()
+    if not app_record:
+        app_record = db.query(Application).filter(Application.application_id == app_str).first()
+    if not app_record:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Application not found.",
+        )
+
+    val_run = (
+        db.query(ValidationRun)
+        .filter(ValidationRun.application_id == app_record.id)
+        .order_by(ValidationRun.id.desc())
+        .first()
+    )
+    if not val_run:
+        val_run = ValidationRunner.run_validation(
+            db=db,
+            application_id=app_record.id,
+            triggered_by=current_user.id,
+        )
+
+    institute = db.query(Institute).filter(Institute.id == app_record.institute_id).first()
+    institute_name = institute.name if institute else "Institute"
+
+    # Pre-fetch rules for metadata lookup
+    rules = db.query(Rule).all()
+    rules_by_code = {r.rule_code: r for r in rules}
+
+    # Deterministic Root Cause Analysis
+    root_causes = RootCauseAnalyzer.analyze_findings(
+        findings=val_run.findings,
+        rules_by_code=rules_by_code,
+    )
+
+    # Generate explanation
+    explanation = ExplainerNarrator.explain(
+        root_causes=root_causes,
+        application_id=app_record.application_id,
+        institute_name=institute_name,
+        lang=lang,
+        run_id=val_run.id,
+        db=db,
+    )
+
+    root_causes_out = [
+        RootCauseOut(
+            cause_code=rc.cause_code,
+            headline=rc.headline,
+            affected_rule_codes=rc.affected_rule_codes,
+            severity=rc.severity,
+            evidence=rc.evidence,
+            fixable_by_institute=rc.fixable_by_institute,
+            ordered_suggested_actions=rc.ordered_suggested_actions,
+            needs_official_review=rc.needs_official_review,
+            finding_ids=rc.finding_ids,
+        )
+        for rc in root_causes
+    ]
+
+    reasons_out = [
+        WhyFailedReasonOut(
+            cause_code=r.get("cause_code", ""),
+            explanation=r.get("explanation", ""),
+            finding_codes=r.get("finding_codes", []),
+        )
+        for r in explanation.get("reasons", [])
+    ]
+
+    how_to_fix_out = [
+        HowToFixItem(
+            step=h.get("step", ""),
+            effort=h.get("effort", "Low"),
+        )
+        for h in explanation.get("how_to_fix", [])
+    ]
+
+    findings_detail = []
+    waived_count = 0
+    for f in val_run.findings:
+        if getattr(f, "is_waived", False):
+            waived_count += 1
+        notes_data = [
+            {
+                "id": n.id,
+                "action": n.action,
+                "author_role": n.author_role,
+                "reason": n.reason,
+                "created_at": n.created_at.isoformat() if n.created_at else None,
+            }
+            for n in getattr(f, "notes", [])
+        ]
+        findings_detail.append({
+            "id": f.id,
+            "rule_code": f.rule_code,
+            "rule_title": f.rule_title,
+            "severity": f.severity,
+            "status": f.status,
+            "reason": f.reason,
+            "is_waived": getattr(f, "is_waived", False),
+            "waived_by": getattr(f, "waived_by", None),
+            "waiver_reason": getattr(f, "waiver_reason", None),
+            "notes": notes_data,
+        })
+
+    return AdminWhyFailedResponse(
+        headline=explanation.get("headline", ""),
+        plain_summary=explanation.get("plain_summary", ""),
+        root_causes=root_causes_out,
+        how_to_fix=how_to_fix_out,
+        reasons=reasons_out,
+        what_officials_will_review=explanation.get("what_officials_will_review"),
+        disclaimer=explanation.get("disclaimer", ""),
+        lang=lang,
+        source=explanation.get("source", "TEMPLATE"),
+        model=explanation.get("model"),
+        prompt_hash=explanation.get("prompt_hash"),
+        validation_run_id=val_run.id,
+        raw_root_causes=[rc.to_dict() for rc in root_causes],
+        waived_findings_count=waived_count,
+        findings_detail=findings_detail,
+    )
+
+
+@router.post("/applications/{application_id}/findings/{code}/note", response_model=FindingNoteResponse)
+def add_finding_note_or_waive(
+    application_id: str,
+    code: str,
+    payload: FindingNoteCreateRequest,
+    current_user: User = Depends(require_admin_or_reviewer),
+    db: Session = Depends(get_db),
+):
+    """
+    An official adds a note or waives a finding with a mandatory reason.
+    ADMIN can waive, REVIEWER can only add notes.
+    The original finding is never altered, and everything is audit logged.
+    """
+    action_upper = payload.action.strip().upper()
+    if action_upper not in ("NOTE", "WAIVE"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Action must be either 'NOTE' or 'WAIVE'.",
+        )
+
+    if not payload.reason or not payload.reason.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Reason is mandatory.",
+        )
+
+    role_str = current_user.role.value if hasattr(current_user.role, "value") else str(current_user.role)
+    if action_upper == "WAIVE" and role_str != "ADMIN":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Reviewers are not authorized to waive findings. Only Administrators may waive findings.",
+        )
+
+    app_record = None
+    app_str = str(application_id).strip()
+    if app_str.isdigit():
+        app_record = db.query(Application).filter(Application.id == int(app_str)).first()
+    if not app_record:
+        app_record = db.query(Application).filter(Application.application_id == app_str).first()
+    if not app_record:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Application not found.",
+        )
+
+    # Find the finding in the latest validation run
+    finding = (
+        db.query(ValidationFinding)
+        .join(ValidationRun, ValidationFinding.run_id == ValidationRun.id)
+        .filter(
+            ValidationRun.application_id == app_record.id,
+            ValidationFinding.rule_code == code,
+        )
+        .order_by(ValidationFinding.id.desc())
+        .first()
+    )
+    if not finding and code.isdigit():
+        finding = (
+            db.query(ValidationFinding)
+            .join(ValidationRun, ValidationFinding.run_id == ValidationRun.id)
+            .filter(
+                ValidationRun.application_id == app_record.id,
+                ValidationFinding.id == int(code),
+            )
+            .first()
+        )
+    if not finding:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Finding with code '{code}' not found for this application.",
+        )
+
+    # If action is WAIVE: mark waived without modifying original finding fields
+    if action_upper == "WAIVE":
+        finding.is_waived = True
+        finding.waived_by = current_user.id
+        finding.waiver_reason = payload.reason.strip()
+        finding.waived_at = datetime.now(timezone.utc)
+
+    # Insert FindingNote audit entry
+    note = FindingNote(
+        finding_id=finding.id,
+        application_id=app_record.id,
+        rule_code=finding.rule_code,
+        author_id=current_user.id,
+        author_role=role_str,
+        action=action_upper,
+        reason=payload.reason.strip(),
+        created_at=datetime.now(timezone.utc),
+    )
+    db.add(note)
+
+    # Audit logging
+    AuditService.log(
+        db=db,
+        user_id=current_user.id,
+        action=f"FINDING_{action_upper}",
+        resource_type="validation_finding",
+        resource_id=str(finding.id),
+        details={
+            "application_id": app_record.id,
+            "rule_code": finding.rule_code,
+            "action": action_upper,
+            "reason": payload.reason.strip(),
+            "author_role": role_str,
+        },
+    )
+    db.commit()
+    db.refresh(finding)
+
+    return FindingNoteResponse(
+        success=True,
+        message=f"Finding '{code}' successfully {'waived' if action_upper == 'WAIVE' else 'annotated'}.",
+        finding_id=finding.id,
+        rule_code=finding.rule_code,
+        action=action_upper,
+        is_waived=finding.is_waived,
+        waived_by=finding.waived_by,
+        waiver_reason=finding.waiver_reason,
+    )
+
+
+@router.get("/assessments/stats", response_model=AssessmentStatsResponse)
+def get_admin_assessments_stats(
+    current_user: User = Depends(require_admin_or_reviewer),
+    db: Session = Depends(get_db),
+):
+    """
+    Returns statistics on the most common failure causes across institutes.
+    """
+    total_apps = db.query(func.count(func.distinct(ValidationRun.application_id))).scalar() or 0
+    total_findings = db.query(func.count(ValidationFinding.id)).scalar() or 0
+    total_waived = db.query(func.count(ValidationFinding.id)).filter(ValidationFinding.is_waived == True).scalar() or 0
+
+    failed_findings = (
+        db.query(ValidationFinding)
+        .filter(ValidationFinding.status != "PASS", ValidationFinding.is_waived == False)
+        .all()
+    )
+
+    rules = db.query(Rule).all()
+    rules_by_code = {r.rule_code: r for r in rules}
+
+    cause_counts: Dict[str, int] = {}
+    rule_fail_counts: Dict[str, Dict[str, Any]] = {}
+
+    for f in failed_findings:
+        rule_meta = rules_by_code.get(f.rule_code)
+        rm_dict = {}
+        if rule_meta:
+            rm_dict = {
+                "rule_type": getattr(rule_meta, "rule_type", None),
+                "evidence_required": getattr(rule_meta, "evidence_required", None),
+            }
+        c_code = RootCauseAnalyzer.classify_finding(f, rm_dict)
+        cause_counts[c_code] = cause_counts.get(c_code, 0) + 1
+
+        if f.rule_code not in rule_fail_counts:
+            rule_fail_counts[f.rule_code] = {
+                "rule_code": f.rule_code,
+                "rule_title": f.rule_title or f.rule_code,
+                "count": 0,
+            }
+        rule_fail_counts[f.rule_code]["count"] += 1
+
+    total_failed = len(failed_findings)
+    common_causes = []
+    for c_code, cnt in sorted(cause_counts.items(), key=lambda x: -x[1]):
+        pct = round((cnt / total_failed * 100.0), 1) if total_failed > 0 else 0.0
+        common_causes.append({
+            "cause_code": c_code,
+            "count": cnt,
+            "percentage": pct,
+        })
+
+    most_failed_rules = sorted(rule_fail_counts.values(), key=lambda x: -x["count"])[:10]
+
+    return AssessmentStatsResponse(
+        total_applications_evaluated=total_apps,
+        total_findings_recorded=total_findings,
+        total_waived_findings=total_waived,
+        common_causes=common_causes,
+        most_failed_rules=most_failed_rules,
+    )
+
 
 

@@ -47,6 +47,17 @@ class AuthService:
         Verify captcha text against stored challenge hash.
         Always consumes challenge (one-time use) regardless of success/failure.
         """
+        if not captcha_text:
+            return False
+
+        # Development mode bypass convenience: accepts 12345, DEMO, or AICTE
+        if getattr(settings, "ENVIRONMENT", "development") == "development":
+            if captcha_text.strip().upper() in ("12345", "DEMO", "AICTE"):
+                return True
+
+        if not captcha_id:
+            return False
+
         challenge = db.query(CaptchaChallenge).filter(CaptchaChallenge.id == captcha_id).first()
         if not challenge:
             return False

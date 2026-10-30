@@ -8,11 +8,13 @@ import {
   Sparkles,
   CheckCircle,
 } from 'lucide-react';
-import { instituteApi, ReportItem } from '../../api/institute';
+import { instituteApi, ReportItem, ApplicationItem } from '../../api/institute';
 import { StatCard } from '../../components/StatCard';
 
 export const ReportsPage: React.FC = () => {
   const [reports, setReports] = useState<ReportItem[]>([]);
+  const [applications, setApplications] = useState<ApplicationItem[]>([]);
+  const [selectedAppId, setSelectedAppId] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
 
   // Form State
@@ -25,8 +27,17 @@ export const ReportsPage: React.FC = () => {
   const fetchReports = async () => {
     try {
       setIsLoading(true);
-      const res = await instituteApi.getReports();
-      setReports(res);
+      const [reportsRes, appsRes] = await Promise.all([
+        instituteApi.getReports(),
+        instituteApi.getApplications().catch(() => ({ items: [] })),
+      ]);
+      setReports(reportsRes);
+      if (appsRes && appsRes.items) {
+        setApplications(appsRes.items);
+        if (appsRes.items.length > 0) {
+          setSelectedAppId(appsRes.items[0].application_id);
+        }
+      }
     } catch (err) {
       console.error(err);
     } finally {
@@ -48,6 +59,7 @@ export const ReportsPage: React.FC = () => {
         report_type: reportType,
         format,
         date_range: dateRange,
+        application_id: reportType === 'Validation Summary' && selectedAppId ? selectedAppId : undefined,
       });
       setGenerateMsg(`Generated ${format} report successfully: ${newReport.filename}`);
       setReports((prev) => [newReport, ...prev]);
@@ -135,9 +147,27 @@ export const ReportsPage: React.FC = () => {
               >
                 <option value="Application Summary">Application Summary (EoA, Intake, Status)</option>
                 <option value="Certificate Expiry">Certificate Expiry Tracker (NOCs, Stability, Fire)</option>
-                <option value="Validation Summary">AI Compliance Scrutiny Report</option>
+                <option value="Validation Summary">Validation Summary (AI Compliance Scrutiny)</option>
               </select>
             </div>
+
+            {reportType === 'Validation Summary' && (
+              <div>
+                <label className="font-bold text-[#0F2A5C] block mb-1">Target Application</label>
+                <select
+                  value={selectedAppId}
+                  onChange={(e) => setSelectedAppId(e.target.value)}
+                  className="w-full h-11 px-3 rounded-lg border border-[#D5DBE5] text-[#0F2A5C] bg-white focus:border-[#F58220] outline-none"
+                >
+                  <option value="">Latest Active Application (Auto-detected)</option>
+                  {applications.map((app) => (
+                    <option key={app.id} value={app.application_id}>
+                      {app.application_id} ({app.category} - {app.academic_year})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             <div>
               <label className="font-bold text-[#0F2A5C] block mb-1">Time Horizon / Date Range</label>

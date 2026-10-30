@@ -310,6 +310,7 @@ class GenerateReportRequest(BaseModel):
     report_type: str  # Application Summary, Certificate Expiry, Validation Summary
     format: str  # PDF, CSV
     date_range: str  # e.g., "Current Academic Year", "Past 30 Days", "Past 90 Days"
+    application_id: Optional[str] = None
 
 
 # --- Notification Schemas ---
@@ -505,5 +506,73 @@ class ValidationRunSummaryOut(BaseModel):
         from_attributes = True
 
 
+class RootCauseOut(BaseModel):
+    cause_code: str
+    headline: str
+    affected_rule_codes: List[str]
+    severity: str
+    evidence: List[Dict[str, Any]] = []
+    fixable_by_institute: bool
+    ordered_suggested_actions: List[str] = []
+    needs_official_review: bool
+    finding_ids: List[int] = []
 
+    class Config:
+        from_attributes = True
+
+
+class HowToFixItem(BaseModel):
+    step: str
+    effort: str
+
+
+class WhyFailedReasonOut(BaseModel):
+    cause_code: str
+    explanation: str
+    finding_codes: List[str] = []
+
+
+class WhyFailedResponse(BaseModel):
+    headline: str
+    plain_summary: str
+    root_causes: List[RootCauseOut] = []
+    how_to_fix: List[HowToFixItem] = []
+    reasons: List[WhyFailedReasonOut] = []
+    what_officials_will_review: Optional[str] = None
+    disclaimer: str
+    lang: str = "en"
+
+
+class AdminWhyFailedResponse(WhyFailedResponse):
+    source: str = "TEMPLATE"
+    model: Optional[str] = None
+    prompt_hash: Optional[str] = None
+    validation_run_id: Optional[int] = None
+    raw_root_causes: List[Dict[str, Any]] = []
+    waived_findings_count: int = 0
+    findings_detail: List[Dict[str, Any]] = []
+
+
+class FindingNoteCreateRequest(BaseModel):
+    action: str  # NOTE | WAIVE
+    reason: str
+
+
+class FindingNoteResponse(BaseModel):
+    success: bool
+    message: str
+    finding_id: int
+    rule_code: str
+    action: str
+    is_waived: bool
+    waived_by: Optional[int] = None
+    waiver_reason: Optional[str] = None
+
+
+class AssessmentStatsResponse(BaseModel):
+    total_applications_evaluated: int
+    total_findings_recorded: int
+    total_waived_findings: int
+    common_causes: List[Dict[str, Any]] = []
+    most_failed_rules: List[Dict[str, Any]] = []
 

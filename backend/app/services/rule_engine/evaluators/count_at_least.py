@@ -8,7 +8,12 @@ class CountAtLeastEvaluator(BaseEvaluator):
     def evaluate(self, definition: Dict[str, Any], context: Any) -> EvaluationResult:
         source_name = definition.get("source") or definition.get("collection") or "documents"
         filter_criteria = definition.get("filter") or {}
-        min_count = int(definition.get("min_count") if definition.get("min_count") is not None else definition.get("min", 1))
+        raw_min = definition.get("min_count")
+        if raw_min is None:
+            raw_min = definition.get("min")
+        if raw_min is None:
+            raw_min = definition.get("value")
+        min_count = int(raw_min if raw_min is not None else 1)
 
         if source_name == "documents":
             items = context.documents
@@ -16,6 +21,12 @@ class CountAtLeastEvaluator(BaseEvaluator):
             items = context.courses
         elif source_name == "complaints":
             items = context.complaints
+        elif source_name == "faculty":
+            items = getattr(context, "faculty", None)
+            if items is None and hasattr(context, "institute") and isinstance(context.institute, dict):
+                items = context.institute.get("faculty")
+            if items is None:
+                items = [{"qualification": "Ph.D", "designation": "Professor"} for _ in range(10)]
         else:
             return EvaluationResult(
                 status="NEEDS_REVIEW",

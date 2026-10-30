@@ -31,6 +31,8 @@ from backend.app.services.report_service import ReportService
 from backend.app.services.document_pipeline.ocr import OCRService
 from backend.app.services.document_pipeline.readiness import ReadinessService
 from backend.app.services.validation.runner import ValidationRunner
+from backend.app.services.explainer.root_cause import RootCauseAnalyzer
+from backend.app.services.explainer.narrator import ExplainerNarrator
 from backend.app.api.deps import get_current_user
 
 from backend.app.schemas.institute import (
@@ -68,6 +70,10 @@ from backend.app.schemas.institute import (
     ValidationRunDiffOut,
     ValidationRunResponse,
     ValidationRunSummaryOut,
+    WhyFailedResponse,
+    RootCauseOut,
+    HowToFixItem,
+    WhyFailedReasonOut,
     ComplaintItem,
     CreateComplaintRequest,
     ReportItem,
@@ -551,6 +557,101 @@ def get_application_validation_history(
         )
         for r in runs
     ]
+
+
+@router.get("/applications/{application_id}/why-failed", response_model=WhyFailedResponse)
+def get_institute_application_why_failed(
+    application_id: str,
+    lang: str = Query("en", pattern="^(en|hi)$"),
+    user: User = Depends(get_current_institute_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Returns only the blocking and failing root causes, with evidence,
+    steps to fix, and the rule reference for the institute.
+    """
+    app_record = _resolve_application_record(application_id, user.institute_id, db)
+
+    val_run = (
+        db.query(ValidationRun)
+        .filter(ValidationRun.application_id == app_record.id)
+        .order_by(ValidationRun.id.desc())
+        .first()
+    )
+
+    if not val_run:
+        val_run = ValidationRunner.run_validation(
+            db=db,
+            application_id=app_record.id,
+            triggered_by=user.id,
+        )
+
+    institute = db.query(Institute).filter(Institute.id == app_record.institute_id).first()
+    institute_name = institute.name if institute else "Institute"
+
+    # Pre-fetch rules for metadata lookup
+    rules = db.query(Rule).all()
+    rules_by_code = {r.rule_code: r for r in rules}
+
+    # Deterministic Root Cause Analysis (merges cascades, groups by cause)
+    root_causes = RootCauseAnalyzer.analyze_findings(
+        findings=val_run.findings,
+        rules_by_code=rules_by_code,
+    )
+
+    # Generate explanation via Narrator (TEMPLATE default or grounded LLM)
+    explanation = ExplainerNarrator.explain(
+        root_causes=root_causes,
+        application_id=app_record.application_id,
+        institute_name=institute_name,
+        lang=lang,
+        run_id=val_run.id,
+        db=db,
+    )
+
+    root_causes_out = [
+        RootCauseOut(
+            cause_code=rc.cause_code,
+            headline=rc.headline,
+            affected_rule_codes=rc.affected_rule_codes,
+            severity=rc.severity,
+            evidence=rc.evidence,
+            fixable_by_institute=rc.fixable_by_institute,
+            ordered_suggested_actions=rc.ordered_suggested_actions,
+            needs_official_review=rc.needs_official_review,
+            finding_ids=rc.finding_ids,
+        )
+        for rc in root_causes
+    ]
+
+    reasons_out = [
+        WhyFailedReasonOut(
+            cause_code=r.get("cause_code", ""),
+            explanation=r.get("explanation", ""),
+            finding_codes=r.get("finding_codes", []),
+        )
+        for r in explanation.get("reasons", [])
+    ]
+
+    how_to_fix_out = [
+        HowToFixItem(
+            step=h.get("step", ""),
+            effort=h.get("effort", "Low"),
+        )
+        for h in explanation.get("how_to_fix", [])
+    ]
+
+    return WhyFailedResponse(
+        headline=explanation.get("headline", ""),
+        plain_summary=explanation.get("plain_summary", ""),
+        root_causes=root_causes_out,
+        how_to_fix=how_to_fix_out,
+        reasons=reasons_out,
+        what_officials_will_review=explanation.get("what_officials_will_review"),
+        disclaimer=explanation.get("disclaimer", ""),
+        lang=lang,
+    )
+
 
 
 
@@ -1309,6 +1410,7 @@ def generate_report(
         report_type=req.report_type,
         report_format=req.format,
         date_range=req.date_range,
+        application_id=req.application_id,
     )
 
     AuditService.log_event(

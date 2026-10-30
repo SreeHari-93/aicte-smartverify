@@ -6,9 +6,18 @@ from backend.app.services.rule_engine.resolver import SafePathResolver, SafeComp
 @EvaluatorRegistry.register("INFRASTRUCTURE")
 class InfrastructureEvaluator(BaseEvaluator):
     def evaluate(self, definition: Dict[str, Any], context: Any) -> EvaluationResult:
-        metric = definition.get("metric", "")
-        operator = definition.get("operator", ">=")
-        target = float(definition.get("target", 0.0))
+        metric = definition.get("metric") or definition.get("check_type") or "carpet_area"
+        operator = definition.get("operator") or ">="
+        target_val = (
+            definition.get("target")
+            or definition.get("min_carpet_area_sqm")
+            or definition.get("min_bandwidth_mbps")
+            or 0.0
+        )
+        try:
+            target = float(target_val)
+        except (ValueError, TypeError):
+            target = 0.0
 
         # Check in institute or application or doc metrics
         actual_val, err = SafePathResolver.resolve(f"institute.{metric}", context)

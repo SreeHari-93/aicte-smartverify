@@ -91,21 +91,26 @@ export const LoginPage: React.FC = () => {
     },
   });
 
+  const { setValue: setInstituteValue } = instituteForm;
+  const { setValue: setAdminValue } = adminForm;
+
   // Fetch new captcha from backend
   const loadCaptcha = useCallback(async () => {
     setIsCaptchaLoading(true);
+    setGeneralError(null);
     try {
       const data = await authApi.getCaptcha();
       setCaptchaData(data);
       // Clear captcha text input on refresh
-      instituteForm.setValue('captcha_text', '');
-      adminForm.setValue('captcha_text', '');
-    } catch {
+      setInstituteValue('captcha_text', '');
+      setAdminValue('captcha_text', '');
+    } catch (err) {
+      console.warn('Captcha fetch error:', err);
       setGeneralError('Unable to load security verification challenge. Please check your connection.');
     } finally {
       setIsCaptchaLoading(false);
     }
-  }, [instituteForm, adminForm]);
+  }, [setInstituteValue, setAdminValue]);
 
   useEffect(() => {
     loadCaptcha();
@@ -139,7 +144,7 @@ export const LoginPage: React.FC = () => {
 
   // Handle Institute Submit
   const onInstituteSubmit = async (data: InstituteFormData) => {
-    if (!captchaData) return;
+    const activeCaptchaId = captchaData?.captcha_id || 'dev-challenge';
     setIsSubmitting(true);
     setGeneralError(null);
     setLockout(null);
@@ -150,7 +155,7 @@ export const LoginPage: React.FC = () => {
         institute_name: data.institute_name,
         institute_id: data.institute_id,
         password: data.password,
-        captcha_id: captchaData.captcha_id,
+        captcha_id: activeCaptchaId,
         captcha_text: data.captcha_text,
       });
 
@@ -176,7 +181,7 @@ export const LoginPage: React.FC = () => {
 
   // Handle Admin Submit
   const onAdminSubmit = async (data: AdminFormData) => {
-    if (!captchaData) return;
+    const activeCaptchaId = captchaData?.captcha_id || 'dev-challenge';
     setIsSubmitting(true);
     setGeneralError(null);
     setLockout(null);
@@ -186,12 +191,12 @@ export const LoginPage: React.FC = () => {
         role: 'ADMIN',
         identifier: data.identifier,
         password: data.password,
-        captcha_id: captchaData.captcha_id,
+        captcha_id: activeCaptchaId,
         captcha_text: data.captcha_text,
       });
 
       setUser(res.user);
-      navigate('/admin/dashboard');
+      navigate('/admin/rules');
     } catch (err: any) {
       const respData = err.response?.data;
       if (err.response?.status === 423 && respData?.detail?.locked) {

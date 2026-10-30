@@ -46,3 +46,35 @@ class AuditService:
         db.refresh(log_entry)
         return log_entry
 
+    @classmethod
+    def log(
+        cls,
+        db: Session,
+        action: str,
+        user_id: Optional[int] = None,
+        role: Optional[str] = None,
+        ip_address: Optional[str] = None,
+        user_agent: Optional[str] = None,
+        reason: Optional[str] = None,
+        details: Optional[dict] = None,
+        resource_type: Optional[str] = None,
+        resource_id: Optional[str] = None,
+    ) -> AuditLog:
+        """Alias for log_event with resource metadata support"""
+        full_details = dict(details or {})
+        if resource_type:
+            full_details["resource_type"] = resource_type
+        if resource_id:
+            full_details["resource_id"] = resource_id
+        return cls.log_event(
+            db=db,
+            action=action,
+            user_id=user_id,
+            role=role,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            reason=reason or (full_details.get("reason") if isinstance(full_details, dict) else None),
+            details=full_details,
+        )
+
+

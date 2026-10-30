@@ -18,7 +18,12 @@ from backend.app.models.checklist_item import ChecklistItem
 from backend.app.models.complaint import Complaint, ComplaintEvent
 from backend.app.models.notification import Notification
 from backend.app.models.report import Report
-from backend.app.models.validation_run import ValidationRun, ValidationFinding
+from backend.app.models.validation_run import (
+    ValidationRun,
+    ValidationFinding,
+    ValidationExplanation,
+    FindingNote,
+)
 
 __all__ = [
     "User",
@@ -49,4 +54,6 @@ __all__ = [
     "Report",
     "ValidationRun",
     "ValidationFinding",
+    "ValidationExplanation",
+    "FindingNote",
 ]
