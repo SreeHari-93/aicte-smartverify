@@ -16,6 +16,8 @@ import {
   X,
   ShieldCheck,
   Sparkles,
+  XCircle,
+  RefreshCw,
 } from 'lucide-react';
 import {
   instituteApi,
@@ -53,6 +55,28 @@ export const UploadPage: React.FC = () => {
   const [fieldEditValue, setFieldEditValue] = useState<string>('');
   const [isSavingField, setIsSavingField] = useState(false);
   const [fieldSaveSuccess, setFieldSaveSuccess] = useState<string | null>(null);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [verifyNotice, setVerifyNotice] = useState<string | null>(null);
+
+  const formatVerificationStatus = (raw?: string): string => {
+    if (!raw) return 'Pending';
+    const u = raw.toUpperCase().trim();
+    switch (u) {
+      case 'VERIFIED':
+        return 'Verified';
+      case 'MISMATCH_DETECTED':
+        return 'Mismatch Detected';
+      case 'EXPIRED':
+        return 'Expired';
+      case 'SOURCE_UNAVAILABLE':
+        return 'Source Unavailable';
+      case 'MANUAL_REVIEW_REQUIRED':
+        return 'Manual Review Required';
+      case 'VERIFICATION_PENDING':
+      default:
+        return 'Pending';
+    }
+  };
 
   const fetchData = async () => {
     try {
@@ -214,6 +238,27 @@ export const UploadPage: React.FC = () => {
       alert(err.response?.data?.detail || 'Failed to update field.');
     } finally {
       setIsSavingField(false);
+    }
+  };
+
+  const handleVerifyNow = async () => {
+    if (!drawerDoc || isVerifying) return;
+    setIsVerifying(true);
+    setVerifyNotice(null);
+    try {
+      await instituteApi.verifyDocument(drawerDoc.id);
+      const updatedExt = await instituteApi.getDocumentExtraction(drawerDoc.id);
+      setExtractionData(updatedExt);
+      const updatedDocs = await instituteApi.getDocuments();
+      setDocuments(updatedDocs);
+      const freshDoc = updatedDocs.find((d) => d.id === drawerDoc.id);
+      if (freshDoc) setDrawerDoc(freshDoc);
+      setVerifyNotice('Statutory verification completed successfully.');
+    } catch (err: any) {
+      console.error('Verification failed:', err);
+      setVerifyNotice('Verification encountered an issue or requires manual scrutiny.');
+    } finally {
+      setIsVerifying(false);
     }
   };
 
@@ -520,20 +565,21 @@ export const UploadPage: React.FC = () => {
                 <th className="py-3 px-4">Uploaded On</th>
                 <th className="py-3 px-4">SHA-256 Digest</th>
                 <th className="py-3 px-4">OCR Status</th>
+                <th className="py-3 px-4">Verification</th>
                 <th className="py-3 px-4 text-center rounded-r-md">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
               {isLoading ? (
                 <tr>
-                  <td colSpan={8} className="py-12 text-center text-slate-400">
+                  <td colSpan={9} className="py-12 text-center text-slate-400">
                     <Loader2 size={24} className="animate-spin mx-auto mb-2 text-[#F58220]" />
                     Loading archive records...
                   </td>
                 </tr>
               ) : documents.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-10 text-center text-slate-400">
+                  <td colSpan={9} className="py-10 text-center text-slate-400">
                     No documents uploaded yet. Use the drop zone above to attach institutional proofs.
                   </td>
                 </tr>
@@ -571,6 +617,9 @@ export const UploadPage: React.FC = () => {
                       </td>
                       <td className="py-3.5 px-4">
                         <StatusPill status={ocrPillStatus} />
+                      </td>
+                      <td className="py-3.5 px-4">
+                        <StatusPill status={formatVerificationStatus(doc.verification_status)} />
                       </td>
                       <td className="py-3.5 px-4">
                         <div className="flex items-center justify-center gap-1.5">
@@ -638,6 +687,115 @@ export const UploadPage: React.FC = () => {
                 <span>{fieldSaveSuccess}</span>
               </div>
             )}
+            {verifyNotice && (
+              <div className="p-3 bg-blue-50 border border-blue-200 text-[#0B3C9D] font-semibold rounded-lg flex items-center gap-2">
+                <CheckCircle2 size={16} />
+                <span>{verifyNotice}</span>
+              </div>
+            )}
+
+            {/* Statutory Verification Section */}
+            <div className="p-4 bg-white border border-slate-200 rounded-[10px] shadow-xs space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <ShieldCheck size={16} className="text-[#0B3C9D]" />
+                  <span className="font-bold text-[#0F2A5C] text-xs">Statutory Verification</span>
+                  <StatusPill
+                    status={formatVerificationStatus(extractionData.verification?.status || drawerDoc?.verification_status)}
+                  />
+                  {extractionData.verification?.is_simulated && (
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-300">
+                      Simulated source
+                    </span>
+                  )}
+                </div>
+
+                <button
+                  onClick={handleVerifyNow}
+                  disabled={isVerifying}
+                  className="px-3 py-1.5 bg-[#0B3C9D] hover:bg-[#092E7A] text-white rounded-[6px] text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-colors disabled:opacity-50 select-none self-start sm:self-auto cursor-pointer"
+                >
+                  {isVerifying ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
+                  Verify now
+                </button>
+              </div>
+
+              {/* Source & Checked-At Meta */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] bg-slate-50/70 p-2.5 rounded-lg border border-slate-100">
+                <div>
+                  <span className="text-slate-400 block">Issuing Authority Source:</span>
+                  <span className="font-semibold text-slate-800">
+                    {extractionData.verification?.source_name || drawerDoc?.verification_source || 'Authority Registry / Digital Signature'}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-400 block">Checked At:</span>
+                  <span className="font-semibold text-slate-800">
+                    {extractionData.verification?.checked_at
+                      ? new Date(extractionData.verification.checked_at).toLocaleString()
+                      : 'Not verified yet'}
+                  </span>
+                </div>
+              </div>
+
+              {extractionData.verification?.message && (
+                <div className="text-[11px] text-slate-600 bg-slate-50 p-2 rounded border border-slate-100">
+                  <span className="font-semibold text-slate-700">Notice: </span>
+                  {extractionData.verification.message}
+                </div>
+              )}
+
+              {/* Per-field Submitted vs Official Comparisons Table */}
+              <div className="mt-2">
+                <span className="text-[11px] font-bold text-[#0F2A5C] uppercase tracking-wider block mb-1.5">
+                  Field Comparison (Submitted vs Official)
+                </span>
+                {extractionData.verification?.all_comparisons && extractionData.verification.all_comparisons.length > 0 ? (
+                  <div className="overflow-x-auto border border-slate-200 rounded-lg">
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead>
+                        <tr className="bg-[#E3F0FF] text-[#0B3C9D] text-[10px] font-bold uppercase tracking-wider">
+                          <th className="py-2 px-3">Field</th>
+                          <th className="py-2 px-3">Submitted Value</th>
+                          <th className="py-2 px-3">Official Value</th>
+                          <th className="py-2 px-3 text-center">Result</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {extractionData.verification.all_comparisons.map((comp, cIdx) => (
+                          <tr key={cIdx} className="hover:bg-slate-50/60">
+                            <td className="py-2 px-3 font-mono text-[11px] font-semibold text-slate-700">
+                              {comp.field.replace(/_/g, ' ')}
+                            </td>
+                            <td className="py-2 px-3 text-slate-800 font-medium break-all">
+                              {String(comp.submitted ?? '—')}
+                            </td>
+                            <td className="py-2 px-3 text-slate-800 font-medium break-all">
+                              {String(comp.official ?? '—')}
+                            </td>
+                            <td className="py-2 px-3 text-center">
+                              {comp.matched ? (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#1E7036] bg-[#E2F6E6] px-2 py-0.5 rounded-full">
+                                  <CheckCircle2 size={12} /> Matched
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#C62828] bg-[#FDE7E9] px-2 py-0.5 rounded-full">
+                                  <XCircle size={12} /> Mismatched
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="text-[11px] text-slate-400 italic p-3 bg-slate-50 rounded border border-slate-100 text-center">
+                    No field comparisons recorded yet. Click &quot;Verify now&quot; to cross-reference against official registers.
+                  </div>
+                )}
+              </div>
+            </div>
 
             {/* Classification Card */}
             {extractionData.classification && (

@@ -181,6 +181,8 @@ class DocumentItem(BaseModel):
     status: str
     ocr_status: Optional[str] = "PENDING"
     ocr_confidence: Optional[float] = None
+    verification_status: Optional[str] = "VERIFICATION_PENDING"
+    verification_source: Optional[str] = None
     created_at: datetime
 
     class Config:
@@ -248,6 +250,8 @@ class ValidationCheckItem(BaseModel):
     result: str  # Pass, Warning, Fail
     evidence: str
     suggested_action: str
+    verification_status: Optional[str] = None
+    source_name: Optional[str] = None
 
 
 class ValidationResponse(BaseModel):
@@ -375,6 +379,7 @@ class DocumentExtractionResponse(BaseModel):
     issue_date: Optional[str] = None
     is_expired: Optional[bool] = None
     days_remaining: Optional[int] = None
+    verification: Optional[Dict[str, Any]] = None
 
 
 class FieldCorrectionRequest(BaseModel):

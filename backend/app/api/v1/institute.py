@@ -1016,6 +1016,32 @@ def get_document_extraction(
                     except ValueError:
                         pass
 
+    # 3. Statutory verification payload
+    ver_payload = None
+    ver_res = VerificationService.get_latest_verification(db=db, document_id=doc.id)
+    if ver_res:
+        details = ver_res.details_json or {}
+        is_sim = (
+            "simulated" in str(ver_res.source_name).lower()
+            or "mock" in str(ver_res.source_name).lower()
+            or bool(details.get("disclaimer"))
+        )
+        ver_payload = {
+            "id": ver_res.id,
+            "status": ver_res.status,
+            "source_name": ver_res.source_name,
+            "source_ref": ver_res.source_ref,
+            "checked_at": ver_res.checked_at.isoformat() if ver_res.checked_at else None,
+            "is_simulated": is_sim,
+            "disclaimer": details.get("disclaimer"),
+            "matched_fields": details.get("matched_fields", []),
+            "mismatched_fields": details.get("mismatched_fields", []),
+            "all_comparisons": details.get("all_comparisons", []),
+            "message": details.get("message"),
+            "manual_decision": ver_res.manual_decision,
+            "manual_reason": ver_res.manual_reason,
+        }
+
     return DocumentExtractionResponse(
         document_id=doc.id,
         filename=doc.original_filename,
@@ -1027,6 +1053,7 @@ def get_document_extraction(
         issue_date=issue_date,
         is_expired=is_expired,
         days_remaining=days_remaining,
+        verification=ver_payload,
     )
 
 
@@ -1421,12 +1448,24 @@ def get_validation_report(
             res = "Fail"
 
         ev_text = f.reason or ""
+        v_status = None
+        v_source = None
+        if isinstance(f.evidence_json, list):
+            for ev in f.evidence_json:
+                if isinstance(ev, dict):
+                    if ev.get("verification_status"):
+                        v_status = str(ev.get("verification_status"))
+                    if ev.get("source_name"):
+                        v_source = str(ev.get("source_name"))
+
         checks.append(
             ValidationCheckItem(
                 check=f.rule_title or f.rule_code,
                 result=res,
                 evidence=ev_text,
                 suggested_action=f.suggested_action or "No remediation required.",
+                verification_status=v_status,
+                source_name=v_source,
             )
         )
 

@@ -13,6 +13,47 @@ export const ValidationPage: React.FC = () => {
   const [whyFailedLang, setWhyFailedLang] = useState<'en' | 'hi'>('en');
   const [isLoadingWhyFailed, setIsLoadingWhyFailed] = useState<boolean>(false);
 
+  const formatVerificationStatus = (raw?: string): string => {
+    if (!raw) return 'Pending';
+    const u = raw.toUpperCase().trim();
+    switch (u) {
+      case 'VERIFIED':
+        return 'Verified';
+      case 'MISMATCH_DETECTED':
+        return 'Mismatch Detected';
+      case 'EXPIRED':
+        return 'Expired';
+      case 'SOURCE_UNAVAILABLE':
+        return 'Source Unavailable';
+      case 'MANUAL_REVIEW_REQUIRED':
+        return 'Manual Review Required';
+      case 'VERIFICATION_PENDING':
+      default:
+        return 'Pending';
+    }
+  };
+
+  const mapFindingToCheck = (f: any): ValidationCheck => {
+    let vStatus: string | undefined;
+    let vSource: string | undefined;
+    if (Array.isArray(f.evidence_json)) {
+      for (const ev of f.evidence_json) {
+        if (ev && typeof ev === 'object') {
+          if (ev.verification_status) vStatus = String(ev.verification_status);
+          if (ev.source_name) vSource = String(ev.source_name);
+        }
+      }
+    }
+    return {
+      check: f.rule_title || f.rule_code,
+      result: f.status === 'PASS' ? 'Pass' : (f.status === 'WARNING' || f.status === 'NEEDS_REVIEW' ? 'Warning' : 'Fail'),
+      evidence: f.reason || 'Verified against published statutory criteria.',
+      suggested_action: f.suggested_action || 'No remediation required.',
+      verification_status: vStatus,
+      source_name: vSource,
+    };
+  };
+
   const loadWhyFailed = async (appId: string, lang: 'en' | 'hi') => {
     setIsLoadingWhyFailed(true);
     try {
@@ -31,13 +72,7 @@ export const ValidationPage: React.FC = () => {
       const data = await instituteApi.getLatestValidation(appId);
       setValRun(data);
       if (data.findings && data.findings.length > 0) {
-        const mappedChecks: ValidationCheck[] = data.findings.map((f) => ({
-          check: f.rule_title || f.rule_code,
-          result: f.status === 'PASS' ? 'Pass' : (f.status === 'WARNING' || f.status === 'NEEDS_REVIEW' ? 'Warning' : 'Fail'),
-          evidence: f.reason || 'Verified against published statutory criteria.',
-          suggested_action: f.suggested_action || 'No remediation required.',
-        }));
-        setChecks(mappedChecks);
+        setChecks(data.findings.map(mapFindingToCheck));
       } else {
         setChecks([]);
       }
@@ -91,13 +126,7 @@ export const ValidationPage: React.FC = () => {
       const data = await instituteApi.runValidation(selectedAppId);
       setValRun(data);
       if (data.findings && data.findings.length > 0) {
-        const mappedChecks: ValidationCheck[] = data.findings.map((f) => ({
-          check: f.rule_title || f.rule_code,
-          result: f.status === 'PASS' ? 'Pass' : (f.status === 'WARNING' || f.status === 'NEEDS_REVIEW' ? 'Warning' : 'Fail'),
-          evidence: f.reason || 'Verified against published statutory criteria.',
-          suggested_action: f.suggested_action || 'No remediation required.',
-        }));
-        setChecks(mappedChecks);
+        setChecks(data.findings.map(mapFindingToCheck));
       } else {
         setChecks([]);
       }
@@ -429,7 +458,22 @@ export const ValidationPage: React.FC = () => {
                       <StatusPill status={item.result} />
                     </td>
                     <td className="py-4 px-4 text-slate-600 leading-relaxed align-top">
-                      {item.evidence}
+                      <div>{item.evidence}</div>
+                      {(item.verification_status || item.source_name) && (
+                        <div className="mt-2 flex items-center gap-2 flex-wrap">
+                          {item.verification_status && (
+                            <StatusPill
+                              status={formatVerificationStatus(item.verification_status)}
+                              className="text-[10px] py-0.5 px-2"
+                            />
+                          )}
+                          {item.source_name && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+                              Source: <strong className="text-[#0B3C9D]">{item.source_name}</strong>
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </td>
                     <td className="py-4 px-4 text-slate-800 font-medium align-top">
                       {item.suggested_action}

@@ -26,6 +26,8 @@ from backend.app.models.certificate import Certificate
 from backend.app.models.report import Report
 from backend.app.models.institute import Institute
 from backend.app.models.rule import Rule
+from backend.app.models.document import Document
+from backend.app.models.verification import VerificationResult
 from backend.app.models.validation_run import ValidationRun, ValidationFinding
 from backend.app.services.validation.runner import ValidationRunner
 from backend.app.services.explainer.root_cause import RootCauseAnalyzer
@@ -711,11 +713,85 @@ class ReportService:
         elements.append(Spacer(1, 10))
 
         # ---------------------------------------------------------
-        # 7. Remediation Steps (How to Fix)
+        # 7. Statutory Document Verification Scrutiny
+        # ---------------------------------------------------------
+        elements.append(Paragraph("4. Statutory Document Verification Scrutiny", sec_head_style))
+        ver_header = [["Document Type / File", "Verification Status", "Issuing Authority Source", "Verified Timestamp"]]
+        ver_rows = []
+
+        # Find application documents
+        app_docs = []
+        inst_id = institute.id if institute else (app.institute_id if app else None)
+        if app:
+            app_docs = (
+                db.query(Document)
+                .filter(
+                    (Document.application_id == app.id)
+                    | ((Document.application_id == None) & (Document.institute_id == inst_id))
+                )
+                .order_by(Document.created_at.desc())
+                .all()
+            )
+
+        if app_docs:
+            for doc_item in app_docs:
+                latest_v = doc_item.latest_verification
+                v_st = latest_v.status if latest_v else "VERIFICATION_PENDING"
+                v_src = latest_v.source_name if latest_v else "Issuing Authority Register"
+                v_time = (
+                    latest_v.checked_at.strftime("%d-%m-%Y %H:%M UTC")
+                    if latest_v and latest_v.checked_at
+                    else "Pending"
+                )
+
+                st_color = (
+                    colors.HexColor("#15803D")
+                    if v_st == "VERIFIED"
+                    else (
+                        colors.HexColor("#B91C1C")
+                        if v_st in ["MISMATCH_DETECTED", "EXPIRED"]
+                        else colors.HexColor("#B45309")
+                    )
+                )
+
+                doc_desc = f"<b>{doc_item.document_type_code or 'DOC'}</b><br/><font color='#475569'>{doc_item.original_filename[:32]}</font>"
+                ver_rows.append([
+                    Paragraph(doc_desc, find_cell_style),
+                    Paragraph(f"<font color='{st_color.hexval()}'><b>{v_st.replace('_', ' ')}</b></font>", find_bold_style),
+                    Paragraph(v_src, find_cell_style),
+                    Paragraph(v_time, find_cell_style),
+                ])
+        else:
+            ver_rows.append([
+                Paragraph("<b>GENERAL</b><br/><font color='#475569'>No institutional documents attached</font>", find_cell_style),
+                Paragraph("<font color='#64748B'><b>PENDING</b></font>", find_bold_style),
+                Paragraph("Issuing Authority Registry", find_cell_style),
+                Paragraph("—", find_cell_style),
+            ])
+
+        ver_table = Table(ver_header + ver_rows, colWidths=[165, 115, 150, 110])
+        ver_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#0F2A5C')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 7.5),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 4),
+            ('TOPPADDING', (0, 0), (-1, 0), 4),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8FAFC')]),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 4),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+        ]))
+        elements.append(ver_table)
+        elements.append(Spacer(1, 10))
+
+        # ---------------------------------------------------------
+        # 8. Remediation Steps (How to Fix)
         # ---------------------------------------------------------
         how_to_fix = explanation.get("how_to_fix", [])
         if how_to_fix:
-            elements.append(Paragraph("4. Recommended Remediation Steps", sec_head_style))
+            elements.append(Paragraph("5. Recommended Remediation Steps", sec_head_style))
             fix_items = []
             for idx, fix in enumerate(how_to_fix, 1):
                 effort_str = fix.get("effort", "Medium")

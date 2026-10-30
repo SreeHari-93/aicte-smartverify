@@ -40,3 +40,19 @@ class Document(Base):
     extracted_fields = relationship("ExtractedField", back_populates="document", cascade="all, delete-orphan")
     classification = relationship("DocumentClassification", back_populates="document", uselist=False, cascade="all, delete-orphan")
     verification_results = relationship("VerificationResult", back_populates="document", cascade="all, delete-orphan", order_by="desc(VerificationResult.id)")
+
+    @property
+    def latest_verification(self):
+        if self.verification_results:
+            return self.verification_results[0]
+        return None
+
+    @property
+    def verification_status(self) -> str:
+        latest = self.latest_verification
+        return latest.status if latest else "VERIFICATION_PENDING"
+
+    @property
+    def verification_source(self):
+        latest = self.latest_verification
+        return latest.source_name if latest else None

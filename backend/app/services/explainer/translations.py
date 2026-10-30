@@ -34,9 +34,9 @@ TRANSLATIONS_HI: Dict[str, Any] = {
             "effort": "निम्न",
         },
         "VERIFICATION_FAILED": {
-            "name": "सत्यापन विफल",
-            "template": "{doc_name} का बाहरी पोर्टल से स्वतः सत्यापन सफल नहीं हुआ ({rule_ref})। आधिकारिक समीक्षा आवश्यक है।",
-            "fix": "संबंधित पोर्टल रिकॉर्ड की स्थिति जांचें और सहायक साक्ष्य प्रस्तुत करें।",
+            "name": "सत्यापन आवश्यक",
+            "template": "{doc_name} के विवरण का आधिकारिक सत्यापन आवश्यक है ({rule_ref})। आधिकारिक पुष्टि आवश्यक है।",
+            "fix": "आधिकारिक पुष्टि आवश्यक है (Official confirmation required)।",
             "effort": "मध्यम",
         },
         "ANOMALY_FLAG": {
@@ -83,6 +83,14 @@ TRANSLATIONS_EN: Dict[str, Any] = {
         "Low": "Low",
         "Medium": "Medium",
         "High": "High",
+    },
+    "causes": {
+        "VERIFICATION_FAILED": {
+            "name": "Needs Verification",
+            "template": "Statutory document '{doc_name}' needs verification against issuing authority records ({rule_ref}). Official confirmation required.",
+            "fix": "Official confirmation required",
+            "effort": "Medium",
+        },
     },
 }
 

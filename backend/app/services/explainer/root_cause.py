@@ -97,8 +97,19 @@ class RootCauseAnalyzer:
             return "EXPIRED_DOCUMENT"
         if rule_code.startswith("DOC_DUP_"):
             return "ANOMALY_FLAG"
+        if rule_code.startswith("DOC_VERIF_"):
+            return "VERIFICATION_FAILED"
         if rule_code.startswith("DOC_MISMATCH_") or rule_code.startswith("DOC_NAME_MISMATCH_"):
             return "DATA_MISMATCH"
+
+        # Check evidence for explicit statutory verification statuses
+        ev_json = getattr(finding, "evidence_json", None)
+        if isinstance(ev_json, list):
+            for item in ev_json:
+                if isinstance(item, dict):
+                    v_st = str(item.get("verification_status") or "").upper()
+                    if v_st in ("MISMATCH_DETECTED", "SOURCE_UNAVAILABLE", "MANUAL_REVIEW_REQUIRED"):
+                        return "VERIFICATION_FAILED"
 
         # 2. Check for missing document first across all rules (a missing document causes cascade failures)
         if any(w in reason_lower for w in ["missing", "not uploaded", "not provided", "not found", "mandatory document", "upload required"]):
@@ -115,10 +126,10 @@ class RootCauseAnalyzer:
             if "expired" in reason_lower or "expired" in title_lower:
                 return "EXPIRED_DOCUMENT"
             return "EXPIRING_SOON"
-        elif rule_type == "CROSS_FIELD_MATCH":
-            return "DATA_MISMATCH"
         elif rule_type == "EXTERNAL_VERIFICATION":
             return "VERIFICATION_FAILED"
+        elif rule_type == "CROSS_FIELD_MATCH":
+            return "DATA_MISMATCH"
         elif rule_type == "INFRASTRUCTURE":
             return "INFRASTRUCTURE_GAP"
         elif rule_type in ("NUMERIC_THRESHOLD", "COUNT_AT_LEAST"):
@@ -139,7 +150,18 @@ class RootCauseAnalyzer:
         if any(w in reason_lower for w in ["missing", "not uploaded", "not provided", "not found", "mandatory document", "upload required"]):
             return "MISSING_DOCUMENT"
 
-        if any(w in reason_lower for w in ["external verification", "unverified", "failed verification", "verification failed"]):
+        if any(w in reason_lower for w in [
+            "mismatch_detected",
+            "source_unavailable",
+            "mismatched statutory records",
+            "external issuing authority source",
+            "issuing authority source",
+            "external verification",
+            "needs verification",
+            "unverified",
+            "failed verification",
+            "verification failed",
+        ]):
             return "VERIFICATION_FAILED"
 
         if any(w in reason_lower for w in ["mismatch", "inconsistent", "differs", "does not match", "discrepancy"]):
@@ -405,7 +427,7 @@ class RootCauseAnalyzer:
             elif cause_code == "ANOMALY_FLAG":
                 headline = f"Document Anomaly Flagged: {clean_doc_name} (needs verification)"
             elif cause_code == "VERIFICATION_FAILED":
-                headline = f"External Verification Failed for {clean_doc_name}"
+                headline = f"Statutory Details for {clean_doc_name} (needs verification)"
             elif cause_code == "INFRASTRUCTURE_GAP":
                 headline = f"Infrastructure Capacity Deficiency: {clean_doc_name}"
             elif cause_code == "THRESHOLD_NOT_MET":
@@ -417,7 +439,9 @@ class RootCauseAnalyzer:
 
             # Suggested actions
             actions = grp["actions"]
-            if not actions:
+            if cause_code == "VERIFICATION_FAILED":
+                actions = ["Official confirmation required"]
+            elif not actions:
                 if cause_code == "MISSING_DOCUMENT":
                     actions = [f"Upload the valid {clean_doc_name} in the document portal."]
                 elif cause_code == "EXPIRED_DOCUMENT":

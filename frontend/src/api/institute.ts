@@ -141,6 +141,8 @@ export interface DocumentItem {
   status: string;
   ocr_status?: string;
   ocr_confidence?: number;
+  verification_status?: string;
+  verification_source?: string;
   created_at: string;
 }
 
@@ -174,6 +176,30 @@ export interface ExtractedFieldItem {
   effective_value?: string;
 }
 
+export interface VerificationComparison {
+  field: string;
+  submitted: any;
+  official: any;
+  matched: boolean;
+  similarity_score?: number;
+}
+
+export interface VerificationInfo {
+  id?: number;
+  status: string;
+  source_name: string;
+  source_ref?: string;
+  checked_at?: string;
+  is_simulated?: boolean;
+  disclaimer?: string;
+  matched_fields: string[];
+  mismatched_fields: Array<{ field: string; submitted: any; official: any }>;
+  all_comparisons: VerificationComparison[];
+  message?: string;
+  manual_decision?: string;
+  manual_reason?: string;
+}
+
 export interface DocumentExtractionData {
   document_id: number;
   filename: string;
@@ -185,6 +211,7 @@ export interface DocumentExtractionData {
   issue_date?: string;
   is_expired?: boolean;
   days_remaining?: number;
+  verification?: VerificationInfo;
 }
 
 export interface ChecklistItemReadiness {
@@ -257,6 +284,8 @@ export interface ValidationCheck {
   result: 'Pass' | 'Warning' | 'Fail';
   evidence: string;
   suggested_action: string;
+  verification_status?: string;
+  source_name?: string;
 }
 
 export interface ValidationResponse {
@@ -513,6 +542,16 @@ export const instituteApi = {
     const res = await apiClient.patch(`/api/institute/documents/${docId}/fields/${key}`, {
       corrected_value,
     });
+    return res.data;
+  },
+
+  verifyDocument: async (docId: number) => {
+    const res = await apiClient.post(`/api/institute/documents/${docId}/verify`);
+    return res.data;
+  },
+
+  getDocumentVerification: async (docId: number) => {
+    const res = await apiClient.get(`/api/institute/documents/${docId}/verification`);
     return res.data;
   },
 

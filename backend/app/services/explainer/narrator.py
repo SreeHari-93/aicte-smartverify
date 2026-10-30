@@ -297,7 +297,7 @@ class ExplainerNarrator:
                     explanation = f"Document '{clean_name}' flagged for anomaly and needs verification (Rule {rules_str})."
                     effort_val = "High"
                 elif rc.cause_code == "VERIFICATION_FAILED":
-                    explanation = f"Automated external portal verification failed for '{clean_name}' (Rule {rules_str}). Official review required."
+                    explanation = f"Statutory document '{clean_name}' needs verification against issuing authority records (Rule {rules_str}). Official confirmation required."
                     effort_val = "Medium"
                 elif rc.cause_code == "INFRASTRUCTURE_GAP":
                     explanation = f"Reported institutional infrastructure in '{clean_name}' falls below AICTE mandated norms (Rule {rules_str})."
@@ -309,7 +309,10 @@ class ExplainerNarrator:
                     explanation = f"Statutory deficiency detected for '{clean_name}' (Rule {rules_str}). Rectification required."
                     effort_val = "Medium"
 
-                fix_step = rc.ordered_suggested_actions[0] if rc.ordered_suggested_actions else f"Remediate {clean_name}."
+                if rc.cause_code == "VERIFICATION_FAILED":
+                    fix_step = "Official confirmation required"
+                else:
+                    fix_step = rc.ordered_suggested_actions[0] if rc.ordered_suggested_actions else f"Remediate {clean_name}."
 
             reasons.append({
                 "cause_code": rc.cause_code,

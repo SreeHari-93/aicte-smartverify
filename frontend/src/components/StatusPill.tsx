@@ -31,24 +31,35 @@ export const StatusPill: React.FC<StatusPillProps> = ({ status, className = '' }
     norm === 'needs_review' ||
     norm === 'incomplete' ||
     norm === 'incomplete_fields' ||
-    norm === 'under review'
+    norm === 'under review' ||
+    norm === 'source unavailable' ||
+    norm === 'source_unavailable' ||
+    norm === 'manual review required' ||
+    norm === 'manual_review_required'
   ) {
-    // Expiring Soon / Needs Attention: orange text on #FFF0D6
+    // Expiring Soon / Needs Attention / Source Unavailable / Manual Review: orange text on #FFF0D6
     bgClass = 'bg-[#FFF0D6] text-[#B85700]';
   } else if (
     norm === 'expired' ||
     norm === 'rejected' ||
     norm === 'fail' ||
     norm === 'missing' ||
-    norm === 'failed'
+    norm === 'failed' ||
+    norm === 'mismatch detected' ||
+    norm === 'mismatch_detected'
   ) {
-    // Expired / Failed / Missing: red text on #FDE7E9
+    // Expired / Failed / Missing / Mismatch: red text on #FDE7E9
     bgClass = 'bg-[#FDE7E9] text-[#C62828]';
   } else if (norm === 'draft' || norm === 'uploaded' || norm === 'open') {
     // Draft/Uploaded: subtle lavender on #ECE8FB
     bgClass = 'bg-[#ECE8FB] text-[#4A3B82]';
-  } else if (norm === 'processing') {
-    // Processing: blue on #E3F0FF
+  } else if (
+    norm === 'processing' ||
+    norm === 'pending' ||
+    norm === 'verification pending' ||
+    norm === 'verification_pending'
+  ) {
+    // Processing / Pending: blue on #E3F0FF
     bgClass = 'bg-[#E3F0FF] text-[#0B3C9D]';
   }
 
