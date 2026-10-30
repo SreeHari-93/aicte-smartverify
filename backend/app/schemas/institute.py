@@ -440,4 +440,70 @@ class ApplicationReadinessResponse(BaseModel):
     duplicates: List[DuplicateWarningOut] = []
 
 
+# --- Validation Runner Schemas ---
+class ValidationFindingOut(BaseModel):
+    id: Optional[int] = None
+    rule_code: str
+    rule_version: Optional[str] = None
+    rule_title: Optional[str] = None
+    severity: str
+    status: str
+    reason: Optional[str] = None
+    evidence_json: List[Any] = []
+    suggested_action: Optional[str] = None
+    created_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class ValidationRunDiffOut(BaseModel):
+    previous_run_id: Optional[int] = None
+    newly_failed: List[str] = []
+    newly_fixed: List[str] = []
+    still_open: List[str] = []
+    newly_failed_count: int = 0
+    newly_fixed_count: int = 0
+    still_open_count: int = 0
+
+
+class ValidationRunResponse(BaseModel):
+    id: int
+    application_id: int
+    application_number: str
+    ruleset_id: Optional[int] = None
+    ruleset_version: Optional[str] = None
+    status: str
+    overall_status: str
+    score: float
+    blocker_count: int
+    major_count: int
+    minor_count: int
+    advisory_count: int
+    started_at: datetime
+    finished_at: Optional[datetime] = None
+    findings: List[ValidationFindingOut] = []
+    diff: Optional[ValidationRunDiffOut] = None
+
+    class Config:
+        from_attributes = True
+
+
+class ValidationRunSummaryOut(BaseModel):
+    id: int
+    application_id: int
+    application_number: str
+    overall_status: str
+    score: float
+    blocker_count: int
+    major_count: int
+    minor_count: int
+    advisory_count: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+
 

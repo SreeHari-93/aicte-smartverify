@@ -96,8 +96,26 @@ class SafePathResolver:
             field_name = ".".join(field_tokens)
             return None, f"Field '{field_name}' not found in extracted data for document type '{doc_type}'."
 
+        # 4. Certificates scope
+        if root == "certificates":
+            if len(tokens) == 1:
+                return context.certificates, None
+            val = SafePathResolver._lookup_dict(context.certificates, tokens[1:])
+            if val is not None:
+                return val, None
+            return None, f"Field '{tokens[1]}' not found in certificates data."
+
+        # 5. Verification scope
+        if root == "verification":
+            if len(tokens) == 1:
+                return context.verification, None
+            val = SafePathResolver._lookup_dict(context.verification, tokens[1:])
+            if val is not None:
+                return val, None
+            return None, f"Field '{tokens[1]}' not found in verification data."
+
         # Unknown root path
-        return None, f"Unknown path scope '{root}'. Must start with 'application', 'institute', 'doc', or 'today'."
+        return None, f"Unknown path scope '{root}'. Must start with 'application', 'institute', 'doc', 'courses', 'certificates', 'verification', or 'today'."
 
     @staticmethod
     def _lookup_dict(data: Any, tokens: list) -> Any:

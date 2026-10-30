@@ -1,5 +1,5 @@
 import os
-from typing import List
+from typing import List, Dict
 from pydantic_settings import BaseSettings
 
 
@@ -31,6 +31,15 @@ class Settings(BaseSettings):
     EXTRACTION_LLM_ENABLED: bool = False
     CLASSIFICATION_CONFIDENCE_THRESHOLD: float = 0.4
     GEMINI_API_KEY: str = ""
+
+    # Validation Engine Settings
+    VALIDATION_MAJOR_FAIL_THRESHOLD: int = 2
+    SEVERITY_DEDUCTION_WEIGHTS: Dict[str, float] = {
+        "BLOCKER": 40.0,
+        "MAJOR": 15.0,
+        "MINOR": 5.0,
+        "ADVISORY": 0.0,
+    }
 
     # Cookies
     COOKIE_SECURE: bool = False  # Set to True in HTTPS production

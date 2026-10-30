@@ -11,11 +11,19 @@ from backend.app.models.document_type import DocumentType
 from backend.app.models.application_category import ApplicationCategory
 from backend.app.models.checklist_item import ChecklistItem
 from backend.app.models.audit_log import AuditLog
+from backend.app.models.validation_run import ValidationRun, ValidationFinding
 from backend.app.services.audit_service import AuditService
 from backend.app.services.rule_engine.schemas import RuleDefinition
 from backend.app.services.rule_engine.engine import RuleEngine
 from backend.app.services.document_pipeline.readiness import ReadinessService
-from backend.app.schemas.institute import ApplicationReadinessResponse, DuplicateWarningOut
+from backend.app.services.validation.runner import ValidationRunner
+from backend.app.schemas.institute import (
+    ApplicationReadinessResponse,
+    DuplicateWarningOut,
+    ValidationFindingOut,
+    ValidationRunDiffOut,
+    ValidationRunResponse,
+)
 from backend.app.config import settings
 from backend.app.api.deps import require_role
 from backend.app.schemas.admin import (
@@ -1079,4 +1087,77 @@ def get_admin_duplicate_documents(
     db: Session = Depends(get_db),
 ):
     return ReadinessService.get_all_duplicates(db=db)
+
+
+@router.get("/applications/{application_id}/validation", response_model=ValidationRunResponse)
+def get_admin_application_validation(
+    application_id: str,
+    current_user: User = Depends(require_admin_or_reviewer),
+    db: Session = Depends(get_db),
+):
+    app_record = None
+    app_str = str(application_id).strip()
+    if app_str.isdigit():
+        app_record = db.query(Application).filter(Application.id == int(app_str)).first()
+    if not app_record:
+        app_record = db.query(Application).filter(Application.application_id == app_str).first()
+    if not app_record:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Application not found.",
+        )
+
+    val_run = (
+        db.query(ValidationRun)
+        .filter(ValidationRun.application_id == app_record.id)
+        .order_by(ValidationRun.id.desc())
+        .first()
+    )
+
+    if not val_run:
+        val_run = ValidationRunner.run_validation(
+            db=db,
+            application_id=app_record.id,
+            triggered_by=current_user.id,
+        )
+
+    findings_out = [
+        ValidationFindingOut(
+            id=f.id,
+            rule_code=f.rule_code,
+            rule_version=f.rule_version,
+            rule_title=f.rule_title,
+            severity=f.severity,
+            status=f.status,
+            reason=f.reason,
+            evidence_json=f.evidence_json or [],
+            suggested_action=f.suggested_action,
+            created_at=f.created_at,
+        )
+        for f in val_run.findings
+    ]
+
+    diff_out = None
+    if val_run.diff_json:
+        diff_out = ValidationRunDiffOut(**val_run.diff_json)
+
+    return ValidationRunResponse(
+        id=val_run.id,
+        application_id=val_run.application_id,
+        application_number=app_record.application_id,
+        ruleset_id=val_run.ruleset_id,
+        ruleset_version=val_run.ruleset_version,
+        status=val_run.status,
+        overall_status=val_run.overall_status,
+        score=val_run.score,
+        blocker_count=val_run.blocker_count,
+        major_count=val_run.major_count,
+        minor_count=val_run.minor_count,
+        advisory_count=val_run.advisory_count,
+        started_at=val_run.started_at,
+        finished_at=val_run.finished_at,
+        findings=findings_out,
+        diff=diff_out,
+    )
+
 

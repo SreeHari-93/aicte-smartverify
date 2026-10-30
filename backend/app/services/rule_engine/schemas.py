@@ -188,6 +188,10 @@ def validate_rule_definition(definition_data: dict) -> RuleDefUnion:
     if not isinstance(definition_data, dict):
         raise ValueError("Rule definition must be a JSON object dictionary.")
 
+    # Support unwrapping if wrapped in 'root'
+    if "root" in definition_data and isinstance(definition_data["root"], dict) and "type" in definition_data["root"]:
+        definition_data = definition_data["root"]
+
     # Check depth before parsing
     calculate_depth(definition_data, current_depth=1)
 

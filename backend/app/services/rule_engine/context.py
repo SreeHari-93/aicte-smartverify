@@ -13,6 +13,8 @@ class EvaluationContext(BaseModel):
     documents: List[Dict[str, Any]] = Field(default_factory=list)
     courses: List[Dict[str, Any]] = Field(default_factory=list)
     complaints: List[Dict[str, Any]] = Field(default_factory=list)
+    certificates: List[Dict[str, Any]] = Field(default_factory=list)
+    verification: Dict[str, Any] = Field(default_factory=dict)
     evaluation_date: Optional[date] = None
 
     class Config:

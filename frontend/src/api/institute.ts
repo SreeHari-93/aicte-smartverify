@@ -265,6 +265,48 @@ export interface ValidationResponse {
   checks: ValidationCheck[];
 }
 
+export interface ValidationFindingItem {
+  id?: number;
+  rule_code: string;
+  rule_version?: string;
+  rule_title?: string;
+  severity: string;
+  status: string;
+  reason?: string;
+  evidence_json: any[];
+  suggested_action?: string;
+  created_at?: string;
+}
+
+export interface ValidationRunDiff {
+  previous_run_id?: number;
+  newly_failed: string[];
+  newly_fixed: string[];
+  still_open: string[];
+  newly_failed_count: number;
+  newly_fixed_count: number;
+  still_open_count: number;
+}
+
+export interface ValidationRunData {
+  id: number;
+  application_id: number;
+  application_number: string;
+  ruleset_id?: number;
+  ruleset_version?: string;
+  status: string;
+  overall_status: string;
+  score: number;
+  blocker_count: number;
+  major_count: number;
+  minor_count: number;
+  advisory_count: number;
+  started_at: string;
+  finished_at?: string;
+  findings: ValidationFindingItem[];
+  diff?: ValidationRunDiff;
+}
+
 export interface ComplaintEvent {
   id: number;
   action: string;
@@ -396,6 +438,21 @@ export const instituteApi = {
 
   getValidationReport: async (appId: string): Promise<ValidationResponse> => {
     const res = await apiClient.get<ValidationResponse>(`/api/institute/validation/${appId}`);
+    return res.data;
+  },
+
+  runValidation: async (appId: string | number): Promise<ValidationRunData> => {
+    const res = await apiClient.post<ValidationRunData>(`/api/institute/applications/${appId}/validate`);
+    return res.data;
+  },
+
+  getLatestValidation: async (appId: string | number): Promise<ValidationRunData> => {
+    const res = await apiClient.get<ValidationRunData>(`/api/institute/applications/${appId}/validation/latest`);
+    return res.data;
+  },
+
+  getValidationHistory: async (appId: string | number): Promise<any[]> => {
+    const res = await apiClient.get<any[]>(`/api/institute/applications/${appId}/validation/history`);
     return res.data;
   },
 

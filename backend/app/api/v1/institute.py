@@ -2,7 +2,7 @@ import hashlib
 import os
 import uuid
 from datetime import datetime, timezone, date
-from typing import Optional, List
+from typing import Optional, List, Any, Dict, Union
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form, status, Response, BackgroundTasks
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
@@ -25,10 +25,12 @@ from backend.app.models.checklist_item import ChecklistItem
 from backend.app.models.complaint import Complaint, ComplaintEvent
 from backend.app.models.notification import Notification
 from backend.app.models.report import Report
+from backend.app.models.validation_run import ValidationRun, ValidationFinding
 from backend.app.services.audit_service import AuditService
 from backend.app.services.report_service import ReportService
 from backend.app.services.document_pipeline.ocr import OCRService
 from backend.app.services.document_pipeline.readiness import ReadinessService
+from backend.app.services.validation.runner import ValidationRunner
 from backend.app.api.deps import get_current_user
 
 from backend.app.schemas.institute import (
@@ -62,6 +64,10 @@ from backend.app.schemas.institute import (
     InstituteChecklistResponse,
     ValidationResponse,
     ValidationCheckItem,
+    ValidationFindingOut,
+    ValidationRunDiffOut,
+    ValidationRunResponse,
+    ValidationRunSummaryOut,
     ComplaintItem,
     CreateComplaintRequest,
     ReportItem,
@@ -368,6 +374,184 @@ def get_institute_application_readiness(
 
     readiness = ReadinessService.evaluate_application(db=db, application=app_record)
     return readiness
+
+
+def _resolve_application_record(app_id_or_number: Any, institute_id: int, db: Session) -> Application:
+    app_record = None
+    app_str = str(app_id_or_number).strip()
+    if app_str.isdigit():
+        app_record = (
+            db.query(Application)
+            .filter(
+                Application.id == int(app_str),
+                Application.institute_id == institute_id,
+            )
+            .first()
+        )
+    if not app_record:
+        app_record = (
+            db.query(Application)
+            .filter(
+                Application.application_id == app_str,
+                Application.institute_id == institute_id,
+            )
+            .first()
+        )
+    if not app_record:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Application not found or access denied.",
+        )
+    return app_record
+
+
+@router.post("/applications/{application_id}/validate", response_model=ValidationRunResponse)
+def validate_institute_application(
+    application_id: str,
+    user: User = Depends(get_current_institute_user),
+    db: Session = Depends(get_db),
+):
+    app_record = _resolve_application_record(application_id, user.institute_id, db)
+
+    val_run = ValidationRunner.run_validation(
+        db=db,
+        application_id=app_record.id,
+        triggered_by=user.id,
+    )
+
+    findings_out = [
+        ValidationFindingOut(
+            id=f.id,
+            rule_code=f.rule_code,
+            rule_version=f.rule_version,
+            rule_title=f.rule_title,
+            severity=f.severity,
+            status=f.status,
+            reason=f.reason,
+            evidence_json=f.evidence_json or [],
+            suggested_action=f.suggested_action,
+            created_at=f.created_at,
+        )
+        for f in val_run.findings
+    ]
+
+    diff_out = None
+    if val_run.diff_json:
+        diff_out = ValidationRunDiffOut(**val_run.diff_json)
+
+    return ValidationRunResponse(
+        id=val_run.id,
+        application_id=val_run.application_id,
+        application_number=app_record.application_id,
+        ruleset_id=val_run.ruleset_id,
+        ruleset_version=val_run.ruleset_version,
+        status=val_run.status,
+        overall_status=val_run.overall_status,
+        score=val_run.score,
+        blocker_count=val_run.blocker_count,
+        major_count=val_run.major_count,
+        minor_count=val_run.minor_count,
+        advisory_count=val_run.advisory_count,
+        started_at=val_run.started_at,
+        finished_at=val_run.finished_at,
+        findings=findings_out,
+        diff=diff_out,
+    )
+
+
+@router.get("/applications/{application_id}/validation/latest", response_model=ValidationRunResponse)
+def get_latest_application_validation(
+    application_id: str,
+    user: User = Depends(get_current_institute_user),
+    db: Session = Depends(get_db),
+):
+    app_record = _resolve_application_record(application_id, user.institute_id, db)
+
+    val_run = (
+        db.query(ValidationRun)
+        .filter(ValidationRun.application_id == app_record.id)
+        .order_by(ValidationRun.id.desc())
+        .first()
+    )
+
+    if not val_run:
+        val_run = ValidationRunner.run_validation(
+            db=db,
+            application_id=app_record.id,
+            triggered_by=user.id,
+        )
+
+    findings_out = [
+        ValidationFindingOut(
+            id=f.id,
+            rule_code=f.rule_code,
+            rule_version=f.rule_version,
+            rule_title=f.rule_title,
+            severity=f.severity,
+            status=f.status,
+            reason=f.reason,
+            evidence_json=f.evidence_json or [],
+            suggested_action=f.suggested_action,
+            created_at=f.created_at,
+        )
+        for f in val_run.findings
+    ]
+
+    diff_out = None
+    if val_run.diff_json:
+        diff_out = ValidationRunDiffOut(**val_run.diff_json)
+
+    return ValidationRunResponse(
+        id=val_run.id,
+        application_id=val_run.application_id,
+        application_number=app_record.application_id,
+        ruleset_id=val_run.ruleset_id,
+        ruleset_version=val_run.ruleset_version,
+        status=val_run.status,
+        overall_status=val_run.overall_status,
+        score=val_run.score,
+        blocker_count=val_run.blocker_count,
+        major_count=val_run.major_count,
+        minor_count=val_run.minor_count,
+        advisory_count=val_run.advisory_count,
+        started_at=val_run.started_at,
+        finished_at=val_run.finished_at,
+        findings=findings_out,
+        diff=diff_out,
+    )
+
+
+@router.get("/applications/{application_id}/validation/history", response_model=List[ValidationRunSummaryOut])
+def get_application_validation_history(
+    application_id: str,
+    user: User = Depends(get_current_institute_user),
+    db: Session = Depends(get_db),
+):
+    app_record = _resolve_application_record(application_id, user.institute_id, db)
+
+    runs = (
+        db.query(ValidationRun)
+        .filter(ValidationRun.application_id == app_record.id)
+        .order_by(ValidationRun.id.desc())
+        .all()
+    )
+
+    return [
+        ValidationRunSummaryOut(
+            id=r.id,
+            application_id=r.application_id,
+            application_number=app_record.application_id,
+            overall_status=r.overall_status,
+            score=r.score,
+            blocker_count=r.blocker_count,
+            major_count=r.major_count,
+            minor_count=r.minor_count,
+            advisory_count=r.advisory_count,
+            created_at=r.created_at,
+        )
+        for r in runs
+    ]
+
 
 
 
@@ -1002,7 +1186,7 @@ def delete_document(
 
 
 # ==============================================================================
-# 6. VALIDATION STUB ENDPOINT
+# 6. VALIDATION REPORT ENDPOINT (Live Findings)
 # ==============================================================================
 @router.get("/validation/{application_id}", response_model=ValidationResponse)
 def get_validation_report(
@@ -1010,52 +1194,43 @@ def get_validation_report(
     user: User = Depends(get_current_institute_user),
     db: Session = Depends(get_db),
 ):
-    # Verify application ownership
-    app = (
-        db.query(Application)
-        .filter(Application.application_id == application_id, Application.institute_id == user.institute_id)
+    app = _resolve_application_record(application_id, user.institute_id, db)
+
+    val_run = (
+        db.query(ValidationRun)
+        .filter(ValidationRun.application_id == app.id)
+        .order_by(ValidationRun.id.desc())
         .first()
     )
-    if not app:
-        raise HTTPException(status_code=404, detail="Application not found or inaccessible.")
+    if not val_run:
+        val_run = ValidationRunner.run_validation(
+            db=db,
+            application_id=app.id,
+            triggered_by=user.id,
+        )
 
-    # Return synthetic demo checks for Step 2 visual layout
-    checks = [
-        ValidationCheckItem(
-            check="Land & Building Title Deed Verification",
-            result="Pass",
-            evidence="Registered Sale Deed No. 4128/2004 verified with Sub-Registrar digital index.",
-            suggested_action="No action required. Land ownership criteria satisfied.",
-        ),
-        ValidationCheckItem(
-            check="Structural Stability & PWD Certificate",
-            result="Pass",
-            evidence="Executive Engineer Certificate issued 12-04-2024. Valid for academic year 2026-27.",
-            suggested_action="Maintain physical copy for spot scrutiny committee.",
-        ),
-        ValidationCheckItem(
-            check="Fire & Life Safety NOC Expiry Risk",
-            result="Warning",
-            evidence="Fire Department NOC No. FS/2024/991 expires on 15-11-2026 (within 16 days).",
-            suggested_action="Submit renewed Fire NOC application receipt to avoid EoA blockage.",
-        ),
-        ValidationCheckItem(
-            check="Cadre-wise Faculty-Student Ratio (FSR 1:20)",
-            result="Pass",
-            evidence="Total enrolled students: 3,420; Verified faculty count: 186. Calculated FSR = 1:18.38.",
-            suggested_action="Norm met. Ensure biometric attendance records remain synchronized.",
-        ),
-        ValidationCheckItem(
-            check="Administrative Barrier-Free & Ramp Access",
-            result="Fail",
-            evidence="Building block C barrier-free lift compliance certificate omitted from annexure.",
-            suggested_action="Upload CPWD-compliant lift inspection certificate in Upload tab.",
-        ),
-    ]
+    checks = []
+    for f in val_run.findings:
+        if f.status == "PASS":
+            res = "Pass"
+        elif f.status in ["WARNING", "NEEDS_REVIEW"]:
+            res = "Warning"
+        else:
+            res = "Fail"
+
+        ev_text = f.reason or ""
+        checks.append(
+            ValidationCheckItem(
+                check=f.rule_title or f.rule_code,
+                result=res,
+                evidence=ev_text,
+                suggested_action=f.suggested_action or "No remediation required.",
+            )
+        )
 
     return ValidationResponse(
-        application_id=application_id,
-        status="UNDER_SCRUTINY",
+        application_id=app.application_id,
+        status=val_run.overall_status,
         checks=checks,
     )
 
