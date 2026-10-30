@@ -41,12 +41,12 @@ def run_stage4_demo():
 
     db = SessionLocal()
     try:
-        # 1. Resolve or create Institute
-        inst = db.query(Institute).first()
+        # 1. Resolve or create Sri Krishna College Institute
+        inst = db.query(Institute).filter(Institute.name.ilike("%Sri Krishna%")).first()
         if not inst:
             inst = Institute(
                 name="Sri Krishna College of Engineering and Technology",
-                aicte_institute_id="1-3327641201",
+                aicte_institute_id="SKCET01",
                 state="Tamil Nadu",
                 status="ACTIVE",
             )
@@ -167,7 +167,7 @@ def run_stage4_demo():
             },
             {
                 "expected_status": VerificationStatus.VERIFICATION_PENDING,
-                "title": "Document 4: Fresh Institutional Upload (VERIFICATION_PENDING)",
+                "title": "Document 4: Fresh Institutional Upload (Pending Verification)",
                 "filename": "DEMO-STAGE4-04_STATUTORY_AFFIDAVIT.pdf",
                 "doc_type_code": "AFFIDAVIT",
                 "fields": {
@@ -216,7 +216,6 @@ def run_stage4_demo():
 
             doc = db.query(Document).filter(
                 Document.original_filename == fn,
-                Document.institute_id == inst.id,
             ).first()
 
             if not doc:
@@ -237,6 +236,7 @@ def run_stage4_demo():
                 db.commit()
                 db.refresh(doc)
             else:
+                doc.institute_id = inst.id
                 doc.extracted_data = spec["fields"]
                 db.commit()
 
@@ -267,20 +267,25 @@ def run_stage4_demo():
                     force_reverify=True,
                 )
             else:
-                # Set VERIFICATION_PENDING record
+                # Set PENDING verification record
                 existing = db.query(VerificationResult).filter(VerificationResult.document_id == doc.id).first()
                 if not existing:
                     existing = VerificationResult(
                         document_id=doc.id,
                         status=VerificationStatus.VERIFICATION_PENDING,
-                        source_name="Awaiting Submission / Verification Queue",
+                        source_name="Pending Verification",
                         source_ref=spec["fields"].get("certificate_number"),
                         checked_at=datetime.now(timezone.utc),
-                        details_json={"message": "Document queued for statutory verification."},
+                        details_json={"message": "Verification pending: Document awaiting statutory authority scrutiny."},
                     )
                     db.add(existing)
                     db.commit()
                     db.refresh(existing)
+                else:
+                    existing.status = VerificationStatus.VERIFICATION_PENDING
+                    existing.source_name = "Pending Verification"
+                    existing.details_json = {"message": "Verification pending: Document awaiting statutory authority scrutiny."}
+                    db.commit()
                 ver_res = existing
 
             db.refresh(doc)
@@ -291,12 +296,13 @@ def run_stage4_demo():
             details = ver_res.details_json or {}
             comparisons = details.get("all_comparisons", [])
             is_sim = "simulated" in ver_res.source_name.lower() or "mock" in ver_res.source_name.lower() or bool(details.get("disclaimer"))
+            disp_st = "PENDING" if ver_res.status == VerificationStatus.VERIFICATION_PENDING else ver_res.status
 
             print("-" * 82)
             print(f"[{idx}/6] {spec['title']}")
             print(f"      Document ID:       {doc.id} ({doc.original_filename})")
             print(f"      Document Type:     {doc.document_type_code}")
-            print(f"      Status:            [{ver_res.status}]")
+            print(f"      Status:            [{disp_st}]")
             print(f"      Authority Source:  {ver_res.source_name} {'[SIMULATED SOURCE]' if is_sim else ''}")
             print(f"      Timestamp:         {ver_res.checked_at.strftime('%Y-%m-%d %H:%M:%S UTC')}")
             if details.get("message"):
@@ -322,7 +328,8 @@ def run_stage4_demo():
         print("STAGE 4 VERIFICATION MATRIX COVERAGE:")
         for spec, doc, ver_res in results_summary:
             status_match = "PASS" if ver_res.status == spec["expected_status"] else "UNEXPECTED"
-            print(f"  - [{status_match}] {spec['expected_status']:<25} -> {doc.original_filename}")
+            disp_exp = "PENDING" if spec["expected_status"] == VerificationStatus.VERIFICATION_PENDING else spec["expected_status"]
+            print(f"  - [{status_match}] {disp_exp:<25} -> {doc.original_filename}")
         print("=" * 82)
         print("Demo Stage 4 Executed Successfully with 6/6 Statuses Demonstrated.")
         print("=" * 82)
