@@ -1668,6 +1668,57 @@ def institute_reply_complaint(
 # ==============================================================================
 # 8. REPORTS ENDPOINTS
 # ==============================================================================
+@router.get("/applications/{application_id}/report.pdf")
+def download_application_report_pdf(
+    application_id: str,
+    lang: str = Query("en", pattern="^(en|hi)$"),
+    user: User = Depends(get_current_institute_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Generate / download a comprehensive AICTE-compliant PDF validation summary report
+    for the specified application. Enforces institute isolation (403 if belonging to another institute).
+    """
+    app_str = str(application_id).strip()
+    app_query = db.query(Application)
+    if app_str.isdigit():
+        app_record = app_query.filter((Application.id == int(app_str)) | (Application.application_id == app_str)).first()
+    else:
+        app_record = app_query.filter(Application.application_id == app_str).first()
+
+    if not app_record:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Application not found.")
+    if app_record.institute_id != user.institute_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden: Application does not belong to your institute.")
+
+    report_record = ReportService.generate_report(
+        db=db,
+        institute_id=user.institute_id,
+        report_type="Validation Summary",
+        report_format="PDF",
+        date_range="Current",
+        application_id=app_record.application_id,
+        language=lang,
+        generated_by=user.email or "INSTITUTE",
+    )
+
+    AuditService.log_event(
+        db=db,
+        action="REPORT_DOWNLOADED",
+        user_id=user.id,
+        role=user.role,
+        reason=f"Downloaded {lang.upper()} validation report PDF for application {app_record.application_id}",
+        details={"report_id": report_record.id, "application_id": app_record.application_id, "language": lang},
+    )
+
+    return FileResponse(
+        path=report_record.file_path,
+        media_type="application/pdf",
+        filename=report_record.filename,
+        headers={"Content-Disposition": f'attachment; filename="{report_record.filename}"'},
+    )
+
+
 @router.post("/reports/generate", response_model=ReportItem, status_code=status.HTTP_201_CREATED)
 def generate_report(
     req: GenerateReportRequest,
@@ -1679,8 +1730,10 @@ def generate_report(
         institute_id=user.institute_id,
         report_type=req.report_type,
         report_format=req.format,
-        date_range=req.date_range,
+        date_range=req.date_range or "Current",
         application_id=req.application_id,
+        language=req.language or "en",
+        generated_by=user.email or "INSTITUTE",
     )
 
     AuditService.log_event(
@@ -1713,13 +1766,13 @@ def download_report(
     user: User = Depends(get_current_institute_user),
     db: Session = Depends(get_db),
 ):
-    rep = (
-        db.query(Report)
-        .filter(Report.id == report_id, Report.institute_id == user.institute_id)
-        .first()
-    )
-    if not rep or not os.path.exists(rep.file_path):
-        raise HTTPException(status_code=404, detail="Report not found on server.")
+    rep = db.query(Report).filter(Report.id == report_id).first()
+    if not rep:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report not found on server.")
+    if rep.institute_id != user.institute_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden: Report does not belong to your institute.")
+    if not os.path.exists(rep.file_path):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report file not found on disk.")
 
     AuditService.log_event(
         db=db,
@@ -1730,7 +1783,12 @@ def download_report(
     )
 
     media_type = "application/pdf" if rep.format == "PDF" else "text/csv"
-    return FileResponse(path=rep.file_path, media_type=media_type, filename=rep.filename)
+    return FileResponse(
+        path=rep.file_path,
+        media_type=media_type,
+        filename=rep.filename,
+        headers={"Content-Disposition": f'attachment; filename="{rep.filename}"'},
+    )
 
 
 # ==============================================================================

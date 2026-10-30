@@ -5,25 +5,25 @@ import {
   Mail,
   CheckCircle,
   Loader2,
-  Sparkles,
+  FileText,
 } from 'lucide-react';
-import { instituteApi, ReportItem, ApplicationItem } from '../../api/institute';
+import { adminApi, AdminReportItem } from '../../api/admin';
+import { instituteApi, ApplicationItem } from '../../api/institute';
 
 export const AdminReportsPage: React.FC = () => {
-  const [reports, setReports] = useState<ReportItem[]>([]);
+  const [reports, setReports] = useState<AdminReportItem[]>([]);
   const [applications, setApplications] = useState<ApplicationItem[]>([]);
   const [selectedAppId, setSelectedAppId] = useState<string>('');
+  const [language, setLanguage] = useState<'en' | 'hi'>('en');
 
-  const [reportType, setReportType] = useState('Validation Summary');
   const [format, setFormat] = useState<'PDF' | 'CSV'>('PDF');
-  const [dateRange] = useState('Current Academic Year 2026-27');
   const [isGenerating, setIsGenerating] = useState(false);
   const [generateMsg, setGenerateMsg] = useState<string | null>(null);
 
   const fetchReports = async () => {
     try {
       const [reportsRes, appsRes] = await Promise.all([
-        instituteApi.getReports(),
+        adminApi.listReports(),
         instituteApi.getApplications().catch(() => ({ items: [] })),
       ]);
       setReports(reportsRes);
@@ -44,33 +44,26 @@ export const AdminReportsPage: React.FC = () => {
 
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!selectedAppId) {
+      alert('Please select an application.');
+      return;
+    }
     setIsGenerating(true);
     setGenerateMsg(null);
 
     try {
-      const newReport = await instituteApi.generateReport({
-        report_type: reportType,
-        format,
-        date_range: dateRange,
-        application_id: selectedAppId || undefined,
-      });
+      await adminApi.downloadApplicationReportPdf(selectedAppId, language);
       setGenerateMsg(
-        `Generated ${format} report successfully: ${newReport.filename}. Report archived and queued for email delivery to 25ec016@skcet.ac.in.`
+        `Generated and downloaded official ${language.toUpperCase()} validation summary PDF for application ${selectedAppId}.`
       );
-      setReports((prev) => [newReport, ...prev]);
+      // Refresh reports list
+      const updated = await adminApi.listReports();
+      setReports(updated);
     } catch (err: any) {
       alert(err.response?.data?.detail || 'Failed to generate report.');
     } finally {
       setIsGenerating(false);
     }
-  };
-
-  const formatBytes = (bytes: number) => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
   };
 
   return (
@@ -87,7 +80,7 @@ export const AdminReportsPage: React.FC = () => {
               Statutory Validation & Council Reports
             </h1>
             <p className="text-sm text-slate-500 mt-1 max-w-2xl">
-              Reports are rendered with ReportLab as authenticated PDFs, downloadable and dispatched to council scrutiny officials.
+              Official council verification transcripts compiled via ReportLab. Governed under "Rules decide, AI explains, Officials approve."
             </p>
           </div>
 
@@ -98,66 +91,51 @@ export const AdminReportsPage: React.FC = () => {
         </div>
 
         {/* Generate Card */}
-        <div className="mt-6 bg-slate-50 rounded-xl border border-slate-200 p-6">
-          <h2 className="text-sm font-bold uppercase tracking-wider text-[#0B3C9D] mb-4">
-            Generate Scrutiny Export
-          </h2>
+        <div className="pt-6">
+          <h3 className="text-sm font-bold uppercase tracking-wider text-slate-500 mb-4">
+            Compile Official Validation Report
+          </h3>
 
-          <form onSubmit={handleGenerate} className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <form onSubmit={handleGenerate} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
-                Report Type
-              </label>
-              <select
-                value={reportType}
-                onChange={(e) => setReportType(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm bg-white"
-              >
-                <option value="Validation Summary">Validation Summary</option>
-                <option value="Application Summary">Application Summary</option>
-                <option value="Compliance Audit">Compliance Audit</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
-                Target Application
-              </label>
+              <label className="block text-xs font-bold text-slate-600 mb-1">Application</label>
               <select
                 value={selectedAppId}
                 onChange={(e) => setSelectedAppId(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm bg-white"
+                className="w-full py-2 px-3 rounded-lg border border-slate-300 text-xs font-mono bg-white focus:outline-none focus:border-[#0B3C9D]"
               >
                 {applications.map((a) => (
                   <option key={a.id} value={a.application_id}>
-                    {a.application_id} ({a.category})
+                    {a.application_id} - {a.programme || a.category}
                   </option>
                 ))}
               </select>
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
-                Export Format
-              </label>
+              <label className="block text-xs font-bold text-slate-600 mb-1">Language</label>
+              <select
+                value={language}
+                onChange={(e) => setLanguage(e.target.value as 'en' | 'hi')}
+                className="w-full py-2 px-3 rounded-lg border border-slate-300 text-xs font-semibold bg-white focus:outline-none focus:border-[#0B3C9D]"
+              >
+                <option value="en">English (Official Standard)</option>
+                <option value="hi">हिन्दी (Devanagari Transcript)</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-600 mb-1">Format</label>
               <div className="flex gap-2">
                 <button
                   type="button"
                   onClick={() => setFormat('PDF')}
-                  className={`flex-1 py-2 rounded-lg text-xs font-bold transition-colors ${
+                  className={`flex-1 py-2 rounded-lg text-xs font-bold transition-colors flex items-center justify-center gap-1.5 ${
                     format === 'PDF' ? 'bg-[#0B3C9D] text-white' : 'bg-white border border-slate-300 text-slate-700'
                   }`}
                 >
-                  PDF Document
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setFormat('CSV')}
-                  className={`flex-1 py-2 rounded-lg text-xs font-bold transition-colors ${
-                    format === 'CSV' ? 'bg-[#0B3C9D] text-white' : 'bg-white border border-slate-300 text-slate-700'
-                  }`}
-                >
-                  CSV Data
+                  <FileText size={13} />
+                  <span>PDF Document</span>
                 </button>
               </div>
             </div>
@@ -166,10 +144,10 @@ export const AdminReportsPage: React.FC = () => {
               <button
                 type="submit"
                 disabled={isGenerating}
-                className="w-full py-2.5 rounded-xl bg-[#0B3C9D] text-white text-xs font-bold hover:bg-[#0F2A5C] shadow-sm flex items-center justify-center gap-2"
+                className="w-full py-2.5 rounded-xl bg-[#F58220] hover:bg-[#E06E0C] text-white text-xs font-bold shadow-sm flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60 transition-colors select-none"
               >
-                {isGenerating ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
-                <span>{isGenerating ? 'Compiling PDF...' : 'Compile Report'}</span>
+                {isGenerating ? <Loader2 size={16} className="animate-spin" /> : <Download size={15} />}
+                <span>{isGenerating ? 'Compiling PDF...' : 'Download PDF Report'}</span>
               </button>
             </div>
           </form>
@@ -185,54 +163,78 @@ export const AdminReportsPage: React.FC = () => {
 
       {/* Reports Archive Table */}
       <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+        <div className="p-4 sm:p-6 border-b border-slate-100 flex items-center justify-between">
+          <h3 className="text-base font-bold text-[#0F2A5C] tracking-tight">
+            Generated Reports Repository ({reports.length})
+          </h3>
+          <span className="text-xs text-slate-500 font-medium">
+            Permanent scrutiny records archive
+          </span>
+        </div>
+
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm text-slate-700">
-            <thead className="bg-slate-50 text-slate-600 font-semibold border-b border-slate-200 uppercase text-xs tracking-wider">
+          <table className="w-full text-left text-xs text-slate-700">
+            <thead className="bg-[#E3F0FF] text-[#0B3C9D] font-bold border-b border-slate-200 uppercase tracking-wider">
               <tr>
-                <th className="py-3.5 px-4">Filename</th>
-                <th className="py-3.5 px-4">Report Type</th>
-                <th className="py-3.5 px-4">Format</th>
-                <th className="py-3.5 px-4">Size</th>
-                <th className="py-3.5 px-4">Generated At</th>
-                <th className="py-3.5 px-4 text-right">Download</th>
+                <th className="py-3 px-3.5">Report ID</th>
+                <th className="py-3 px-3.5">Institute</th>
+                <th className="py-3 px-3.5">Application</th>
+                <th className="py-3 px-3.5">Report Type</th>
+                <th className="py-3 px-3.5">Language</th>
+                <th className="py-3 px-3.5">Generated By</th>
+                <th className="py-3 px-3.5">Date</th>
+                <th className="py-3 px-3.5 text-center">Action</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-slate-100 font-medium">
               {reports.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-12 text-center text-slate-400">
+                  <td colSpan={8} className="py-12 text-center text-slate-400">
                     No reports generated yet.
                   </td>
                 </tr>
               ) : (
                 reports.map((r) => (
                   <tr key={r.id} className="hover:bg-slate-50/70 transition-colors">
-                    <td className="py-3.5 px-4 font-mono font-bold text-[#0F2A5C]">
-                      {r.filename}
+                    <td className="py-3 px-3.5 font-mono font-bold text-[#0B3C9D]">
+                      #{r.id}
                     </td>
-                    <td className="py-3.5 px-4 font-semibold text-slate-700">
-                      {r.report_type}
+                    <td className="py-3 px-3.5 text-slate-800 font-semibold max-w-[150px] truncate">
+                      {r.institute_name || `Institute #${r.institute_id}`}
                     </td>
-                    <td className="py-3.5 px-4 whitespace-nowrap">
-                      <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-slate-100 text-slate-700">
-                        {r.format}
+                    <td className="py-3 px-3.5 font-mono text-slate-700 whitespace-nowrap">
+                      {r.application_id || <span className="text-slate-400 italic">General</span>}
+                    </td>
+                    <td className="py-3 px-3.5 font-semibold text-slate-800 max-w-[150px] truncate">
+                      <div className="flex items-center gap-1.5">
+                        <span>{r.report_type}</span>
+                        <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold ${
+                          r.format === 'PDF' ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
+                        }`}>
+                          {r.format}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="py-3 px-3.5 whitespace-nowrap">
+                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700 uppercase">
+                        {r.language || 'EN'}
                       </span>
                     </td>
-                    <td className="py-3.5 px-4 whitespace-nowrap text-xs text-slate-500 font-mono">
-                      {formatBytes(r.file_size)}
+                    <td className="py-3 px-3.5 text-slate-600 max-w-[120px] truncate text-[11px]">
+                      {r.generated_by || 'ADMIN'}
                     </td>
-                    <td className="py-3.5 px-4 whitespace-nowrap text-xs text-slate-500">
-                      {new Date(r.created_at).toLocaleString()}
+                    <td className="py-3 px-3.5 whitespace-nowrap text-slate-500">
+                      {new Date(r.created_at).toLocaleDateString('en-GB')}
                     </td>
-                    <td className="py-3.5 px-4 text-right whitespace-nowrap">
-                      <a
-                        href={`/api/institute/reports/${r.id}/download`}
-                        download
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-50 text-[#0B3C9D] hover:bg-blue-100 text-xs font-bold"
+                    <td className="py-3 px-3.5 text-center whitespace-nowrap">
+                      <button
+                        onClick={() => adminApi.downloadReportFile(r.id, r.filename)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[6px] bg-[#0B3C9D] hover:bg-[#092E7A] text-white text-xs font-semibold cursor-pointer select-none transition-colors"
+                        title="Download archived report PDF"
                       >
-                        <Download size={13} />
+                        <Download size={12} />
                         <span>Download</span>
-                      </a>
+                      </button>
                     </td>
                   </tr>
                 ))

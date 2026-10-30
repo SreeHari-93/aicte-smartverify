@@ -312,6 +312,10 @@ class ReportItem(BaseModel):
     filename: str
     file_size: int
     created_at: datetime
+    application_id: Optional[str] = None
+    language: Optional[str] = "en"
+    generated_by: Optional[str] = "INSTITUTE"
+    institute_name: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -322,6 +326,7 @@ class GenerateReportRequest(BaseModel):
     format: str  # PDF, CSV
     date_range: str  # e.g., "Current Academic Year", "Past 30 Days", "Past 90 Days"
     application_id: Optional[str] = None
+    language: Optional[str] = "en"
 
 
 # --- Notification Schemas ---

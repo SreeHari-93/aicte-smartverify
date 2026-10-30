@@ -23,6 +23,8 @@ from backend.app.models.notification import Notification
 from backend.app.models.email_outbox import EmailOutbox
 from backend.app.models.verification import VerificationResult, VerificationStatus
 from backend.app.models.anomaly import AnomalyFlag, AnomalyReviewStatus
+from backend.app.models.report import Report
+from backend.app.services.report_service import ReportService
 from backend.app.services.audit_service import AuditService
 from backend.app.services.email_service import EmailService
 from backend.app.services.rule_engine.schemas import RuleDefinition
@@ -99,6 +101,8 @@ from backend.app.schemas.admin import (
     AdminComplaintReplyRequest,
     AdminComplaintAssignRequest,
     AdminDashboardStats,
+    AdminReportItem,
+    AdminGenerateReportRequest,
 )
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -2803,6 +2807,124 @@ def get_admin_dashboard_metrics(
         document_types_count=doc_types,
         checklists_count=checklists,
     )
+
+
+# ==============================================================================
+# ADMIN REPORTS ENDPOINTS
+# ==============================================================================
+
+@router.get("/applications/{application_id}/report.pdf")
+def download_admin_application_report_pdf(
+    application_id: str,
+    lang: str = Query("en", pattern="^(en|hi)$"),
+    current_user: User = Depends(require_admin_or_reviewer),
+    db: Session = Depends(get_db),
+):
+    """
+    Generate and download official PDF validation summary report for any application.
+    Admin/Reviewer role only.
+    """
+    app_str = str(application_id).strip()
+    app_query = db.query(Application)
+    if app_str.isdigit():
+        app_record = app_query.filter((Application.id == int(app_str)) | (Application.application_id == app_str)).first()
+    else:
+        app_record = app_query.filter(Application.application_id == app_str).first()
+
+    if not app_record:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Application not found.")
+
+    report_record = ReportService.generate_report(
+        db=db,
+        institute_id=app_record.institute_id,
+        report_type="Validation Summary",
+        report_format="PDF",
+        date_range="Current",
+        application_id=app_record.application_id,
+        language=lang,
+        generated_by=f"OFFICIAL ({current_user.email})",
+    )
+
+    AuditService.log_event(
+        db=db,
+        action="ADMIN_REPORT_GENERATED",
+        user_id=current_user.id,
+        role=current_user.role,
+        reason=f"Generated {lang.upper()} validation report PDF for application {app_record.application_id}",
+        details={"report_id": report_record.id, "application_id": app_record.application_id, "language": lang},
+    )
+
+    return FileResponse(
+        path=report_record.file_path,
+        media_type="application/pdf",
+        filename=report_record.filename,
+        headers={"Content-Disposition": f'attachment; filename="{report_record.filename}"'},
+    )
+
+
+@router.get("/reports", response_model=List[AdminReportItem])
+def get_admin_reports(
+    limit: int = Query(100, ge=1, le=500),
+    current_user: User = Depends(require_admin_or_reviewer),
+    db: Session = Depends(get_db),
+):
+    """
+    List all generated reports across all institutes with metadata.
+    """
+    reports = db.query(Report).order_by(Report.created_at.desc()).limit(limit).all()
+    inst_map = {i.id: i.name for i in db.query(Institute).all()}
+
+    results = []
+    for r in reports:
+        results.append(
+            AdminReportItem(
+                id=r.id,
+                institute_id=r.institute_id,
+                institute_name=inst_map.get(r.institute_id, f"Institute #{r.institute_id}"),
+                report_type=r.report_type,
+                format=r.format,
+                date_range=r.date_range,
+                filename=r.filename,
+                file_size=r.file_size,
+                created_at=r.created_at,
+                application_id=r.application_id,
+                language=r.language or "en",
+                generated_by=r.generated_by or "SYSTEM",
+            )
+        )
+    return results
+
+
+@router.get("/reports/{report_id}/download")
+def download_admin_report(
+    report_id: int,
+    current_user: User = Depends(require_admin_or_reviewer),
+    db: Session = Depends(get_db),
+):
+    """
+    Download any generated report by report ID.
+    """
+    rep = db.query(Report).filter(Report.id == report_id).first()
+    if not rep or not os.path.exists(rep.file_path):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Report not found on server.")
+
+    AuditService.log_event(
+        db=db,
+        action="ADMIN_REPORT_DOWNLOADED",
+        user_id=current_user.id,
+        role=current_user.role,
+        reason=f"Admin downloaded report file: {rep.filename}",
+        details={"report_id": rep.id},
+    )
+
+    media_type = "application/pdf" if rep.format == "PDF" else "text/csv"
+    return FileResponse(
+        path=rep.file_path,
+        media_type=media_type,
+        filename=rep.filename,
+        headers={"Content-Disposition": f'attachment; filename="{rep.filename}"'},
+    )
+
 
 
 

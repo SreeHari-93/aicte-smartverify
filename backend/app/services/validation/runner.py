@@ -16,6 +16,7 @@ from backend.app.models.rule import Rule, RuleSet
 from backend.app.models.validation_run import ValidationRun, ValidationFinding
 from backend.app.models.verification import VerificationResult
 from backend.app.models.anomaly import AnomalyFlag
+from backend.app.models.notification import Notification
 from backend.app.models.audit_log import AuditLog
 from backend.app.services.audit_service import AuditService
 from backend.app.services.rule_engine.context import EvaluationContext
@@ -651,5 +652,20 @@ class ValidationRunner:
                 "advisory_count": advisory_count,
             },
         )
+
+        # 11. In-app Notification if validation status changed
+        if application.institute_id and (prev_run is None or prev_run.overall_status != overall_status):
+            status_label = overall_status.replace("_", " ").title()
+            notif = Notification(
+                institute_id=application.institute_id,
+                title=f"Validation Status Updated: {status_label}",
+                message=f"Validation run #{val_run.id} for Application {application.application_id} completed with status '{status_label}' (Score: {score}/100).",
+                type="VALIDATION_STATUS_CHANGED",
+                link="/institute/reports",
+                is_read=False,
+                created_at=datetime.now(timezone.utc),
+            )
+            db.add(notif)
+            db.commit()
 
         return val_run

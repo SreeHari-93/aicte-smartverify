@@ -485,3 +485,35 @@ class AdminDashboardStats(BaseModel):
     checklists_count: int
 
 
+# -------------------------------------------------------------
+# Admin Reports
+# -------------------------------------------------------------
+
+class AdminReportItem(BaseModel):
+    id: int
+    institute_id: int
+    institute_name: Optional[str] = None
+    report_type: str
+    format: str
+    date_range: str
+    filename: str
+    file_size: int
+    created_at: datetime
+    application_id: Optional[str] = None
+    language: Optional[str] = "en"
+    generated_by: Optional[str] = "ADMIN"
+
+    class Config:
+        from_attributes = True
+
+
+class AdminGenerateReportRequest(BaseModel):
+    institute_id: int
+    application_id: Optional[str] = None
+    report_type: str = "Validation Summary"
+    format: str = "PDF"
+    date_range: str = "Current Academic Year 2026-27"
+    language: str = "en"
+
+
+

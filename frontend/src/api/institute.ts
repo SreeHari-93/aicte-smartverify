@@ -365,6 +365,9 @@ export interface ReportItem {
   filename: string;
   file_size: number;
   created_at: string;
+  application_id?: string;
+  language?: string;
+  generated_by?: string;
 }
 
 export interface NotificationItem {
@@ -528,6 +531,7 @@ export const instituteApi = {
     format: string;
     date_range: string;
     application_id?: string;
+    language?: string;
   }): Promise<ReportItem> => {
     const res = await apiClient.post<ReportItem>('/api/institute/reports/generate', payload);
     return res.data;
@@ -536,6 +540,38 @@ export const instituteApi = {
   getReports: async (): Promise<ReportItem[]> => {
     const res = await apiClient.get<ReportItem[]>('/api/institute/reports');
     return res.data;
+  },
+
+  downloadApplicationReportPdf: async (appId: string | number, lang: 'en' | 'hi' = 'en') => {
+    const response = await apiClient.get(`/api/institute/applications/${appId}/report.pdf`, {
+      params: { lang },
+      responseType: 'blob',
+    });
+    const blob = new Blob([response.data], { type: 'application/pdf' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `validation_summary_${appId}_${lang}.pdf`);
+    document.body.appendChild(link);
+    link.click();
+    link.parentNode?.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  },
+
+  downloadReportFile: async (reportId: number, filename?: string) => {
+    const response = await apiClient.get(`/api/institute/reports/${reportId}/download`, {
+      responseType: 'blob',
+    });
+    const contentType = (response.headers['content-type'] as string) || 'application/octet-stream';
+    const blob = new Blob([response.data], { type: contentType });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', filename || `report_${reportId}.pdf`);
+    document.body.appendChild(link);
+    link.click();
+    link.parentNode?.removeChild(link);
+    window.URL.revokeObjectURL(url);
   },
 
   getNotifications: async (): Promise<{ items: NotificationItem[]; unread_count: number }> => {

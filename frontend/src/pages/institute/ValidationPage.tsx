@@ -12,6 +12,7 @@ import {
   ShieldAlert,
   Network,
   AlertCircle,
+  Download,
 } from 'lucide-react';
 import {
   instituteApi,
@@ -35,6 +36,8 @@ export const ValidationPage: React.FC = () => {
   const [whyFailedData, setWhyFailedData] = useState<WhyFailedData | null>(null);
   const [whyFailedLang, setWhyFailedLang] = useState<'en' | 'hi'>('en');
   const [isLoadingWhyFailed, setIsLoadingWhyFailed] = useState<boolean>(false);
+  const [downloadLang, setDownloadLang] = useState<'en' | 'hi'>('en');
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState<boolean>(false);
 
   // Evidence Graph State
   const [evidenceGraph, setEvidenceGraph] = useState<EvidenceGraphData | null>(null);
@@ -187,6 +190,19 @@ export const ValidationPage: React.FC = () => {
     }
   };
 
+  const handleDownloadPdf = async () => {
+    if (!selectedAppId || isDownloadingPdf) return;
+    setIsDownloadingPdf(true);
+    try {
+      await instituteApi.downloadApplicationReportPdf(selectedAppId, downloadLang);
+    } catch (err: any) {
+      console.error('Download report failed:', err);
+      alert(err.response?.data?.detail || 'Failed to download report PDF. Please ensure validation has run.');
+    } finally {
+      setIsDownloadingPdf(false);
+    }
+  };
+
   const computeGraphLayout = (graph: EvidenceGraphData | null) => {
     if (!graph || !graph.nodes) return { positions: new Map<string, { x: number; y: number; node: EvidenceGraphNode }>(), width: 920, height: 490 };
 
@@ -276,17 +292,39 @@ export const ValidationPage: React.FC = () => {
             </select>
           </div>
 
-          {/* "Run Validation" Button */}
-          <div className="pt-4 sm:pt-0">
+          {/* Actions: Run Validation & Download PDF Report */}
+          <div className="flex items-center gap-2.5 pt-4 sm:pt-0 flex-wrap">
             <button
               onClick={handleRunValidation}
               disabled={isValidating}
-              className="h-10 px-5 bg-[#0B3C9D] hover:bg-[#093280] active:scale-[0.98] text-white text-xs font-semibold rounded-[6px] transition-all flex items-center gap-2 shadow-xs cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed select-none"
+              className="h-10 px-4 bg-[#0B3C9D] hover:bg-[#093280] active:scale-[0.98] text-white text-xs font-semibold rounded-[6px] transition-all flex items-center gap-2 shadow-xs cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed select-none"
               title="Run statutory validation engine"
             >
               <Play size={14} className={isValidating ? 'animate-spin' : ''} />
               <span>{isValidating ? 'Validating...' : 'Run Validation'}</span>
             </button>
+
+            {/* "Download PDF report" button with English / Hindi choice */}
+            <div className="flex items-center border border-[#D5DBE5] rounded-[6px] bg-white overflow-hidden shadow-xs h-10">
+              <select
+                value={downloadLang}
+                onChange={(e) => setDownloadLang(e.target.value as 'en' | 'hi')}
+                className="h-full px-2 text-xs border-r border-[#D5DBE5] text-[#0F2A5C] bg-slate-50 focus:outline-none font-medium cursor-pointer"
+                title="Select Report Language"
+              >
+                <option value="en">EN</option>
+                <option value="hi">हिन्दी</option>
+              </select>
+              <button
+                onClick={handleDownloadPdf}
+                disabled={isDownloadingPdf}
+                className="h-full px-3.5 bg-[#F58220] hover:bg-[#E06E0C] active:scale-[0.98] text-white text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-60 select-none"
+                title="Download comprehensive PDF validation summary report"
+              >
+                <Download size={13} className={isDownloadingPdf ? 'animate-bounce' : ''} />
+                <span>{isDownloadingPdf ? 'Downloading...' : 'Download PDF Report'}</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>

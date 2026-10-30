@@ -432,6 +432,42 @@ export const adminApi = {
     const res = await apiClient.get<AdminDashboardStats>('/api/v1/admin/dashboard-stats');
     return res.data;
   },
+
+  // 10. Reports Archive & Download
+  listReports: async (limit: number = 100): Promise<AdminReportItem[]> => {
+    const res = await apiClient.get<AdminReportItem[]>('/api/v1/admin/reports', { params: { limit } });
+    return res.data;
+  },
+  downloadApplicationReportPdf: async (appId: string | number, lang: 'en' | 'hi' = 'en') => {
+    const response = await apiClient.get(`/api/v1/admin/applications/${appId}/report.pdf`, {
+      params: { lang },
+      responseType: 'blob',
+    });
+    const blob = new Blob([response.data], { type: 'application/pdf' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `validation_summary_${appId}_${lang}.pdf`);
+    document.body.appendChild(link);
+    link.click();
+    link.parentNode?.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  },
+  downloadReportFile: async (reportId: number, filename?: string) => {
+    const response = await apiClient.get(`/api/v1/admin/reports/${reportId}/download`, {
+      responseType: 'blob',
+    });
+    const contentType = (response.headers['content-type'] as string) || 'application/octet-stream';
+    const blob = new Blob([response.data], { type: contentType });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', filename || `report_${reportId}.pdf`);
+    document.body.appendChild(link);
+    link.click();
+    link.parentNode?.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  },
 };
 
 // -------------------------------------------------------------
@@ -540,5 +576,20 @@ export interface AdminDashboardStats {
   draft_rules_count: number;
   document_types_count: number;
   checklists_count: number;
+}
+
+export interface AdminReportItem {
+  id: number;
+  institute_id: number;
+  institute_name?: string;
+  report_type: string;
+  format: 'PDF' | 'CSV';
+  date_range: string;
+  filename: string;
+  file_size: number;
+  created_at: string;
+  application_id?: string;
+  language?: string;
+  generated_by?: string;
 }
 
