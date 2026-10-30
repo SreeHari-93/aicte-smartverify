@@ -631,6 +631,9 @@ class OCRService:
                         db.add(ef)
 
                     updated_ext_data = dict(doc.extracted_data or {})
+                    for f in ext_res.fields:
+                        if f.key and f.value:
+                            updated_ext_data[f.key] = f.normalized_value or f.value
                     updated_ext_data["expiry_date"] = ext_res.expiry_date
                     updated_ext_data["issue_date"] = ext_res.issue_date
                     updated_ext_data["is_expired"] = ext_res.is_expired

@@ -1,4 +1,4 @@
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Union
 from pydantic import BaseModel, Field, field_validator
 from datetime import datetime
 
@@ -24,6 +24,8 @@ class DocumentTypeBase(BaseModel):
     has_expiry: bool = False
     default_validity_months: Optional[int] = None
     verification_method: str = "MANUAL"  # QR | API | PORTAL | DIGITAL_SIGNATURE | MANUAL
+    authority_adapter: Optional[str] = None
+    statutory_verification_applies: Optional[bool] = False
     extraction_schema: Optional[List[Dict[str, Any]]] = None
     keywords: Optional[List[str]] = None
     is_active: bool = True
@@ -42,6 +44,8 @@ class DocumentTypeUpdate(BaseModel):
     has_expiry: Optional[bool] = None
     default_validity_months: Optional[int] = None
     verification_method: Optional[str] = None
+    authority_adapter: Optional[str] = None
+    statutory_verification_applies: Optional[bool] = None
     extraction_schema: Optional[List[Dict[str, Any]]] = None
     keywords: Optional[List[str]] = None
     is_active: Optional[bool] = None
@@ -92,6 +96,9 @@ class ApplicationCategoryOut(ApplicationCategoryBase):
 
 class ChecklistItemBase(BaseModel):
     document_type_id: int
+    ruleset_id: Optional[int] = None
+    institute_type: Optional[str] = "ALL"
+    min_count: int = 1
     is_mandatory: bool = True
     condition: Optional[Dict[str, Any]] = None
     min_validity_days_remaining: Optional[int] = None
@@ -107,6 +114,9 @@ class ChecklistItemCreate(ChecklistItemBase):
 
 class ChecklistItemUpdate(BaseModel):
     document_type_id: Optional[int] = None
+    ruleset_id: Optional[int] = None
+    institute_type: Optional[str] = None
+    min_count: Optional[int] = None
     is_mandatory: Optional[bool] = None
     condition: Optional[Dict[str, Any]] = None
     min_validity_days_remaining: Optional[int] = None
@@ -242,8 +252,9 @@ class RuleSetOut(BaseModel):
 
 class RuleSimulationRequest(BaseModel):
     definition: Dict[str, Any]
-    context: Dict[str, Any]
+    context: Optional[Dict[str, Any]] = Field(default_factory=dict)
     rule_meta: Optional[Dict[str, Any]] = None
+    application_id: Optional[Union[int, str]] = None
 
 
 class RuleSimulationResponse(BaseModel):
@@ -253,6 +264,7 @@ class RuleSimulationResponse(BaseModel):
     rule_code: str
     rule_title: str
     severity: str
+    evaluated_context_summary: Optional[Dict[str, Any]] = None
 
 
 class DefinitionValidationRequest(BaseModel):
@@ -264,6 +276,58 @@ class DefinitionValidationResponse(BaseModel):
     message: str
     depth: int = 0
     errors: List[str] = Field(default_factory=list)
+
+
+# -------------------------------------------------------------
+# Audit Logs, Preview & Diff
+# -------------------------------------------------------------
+
+class AuditLogOut(BaseModel):
+    id: int
+    user_id: Optional[int] = None
+    role: Optional[str] = None
+    ip_address: Optional[str] = None
+    action: str
+    reason: Optional[str] = None
+    details: Optional[Dict[str, Any]] = None
+    timestamp: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class PublishPreviewOut(BaseModel):
+    active_ruleset_name: Optional[str] = None
+    active_ruleset_version: Optional[str] = None
+    current_active_rules_count: int
+    new_rules: List[Dict[str, Any]]
+    modified_rules: List[Dict[str, Any]]
+    unchanged_rules_count: int
+    total_rules_to_publish: int
+    total_categories_count: int
+    total_checklists_count: int
+    total_document_types_count: int
+
+
+class RuleDiffOut(BaseModel):
+    rule_code: str
+    version_1: int
+    version_2: int
+    differences: Dict[str, Dict[str, Any]]
+
+
+class AdminApplicationOut(BaseModel):
+    id: int
+    application_id: str
+    institute_id: int
+    institute_name: Optional[str] = None
+    category: str
+    academic_year: str
+    status: str
+    filed_on: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
 
 
 # -------------------------------------------------------------

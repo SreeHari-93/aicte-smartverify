@@ -196,7 +196,7 @@ export const LoginPage: React.FC = () => {
       });
 
       setUser(res.user);
-      navigate('/admin/rules');
+      navigate('/admin');
     } catch (err: any) {
       const respData = err.response?.data;
       if (err.response?.status === 423 && respData?.detail?.locked) {

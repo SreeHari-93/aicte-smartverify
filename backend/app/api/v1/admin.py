@@ -77,6 +77,10 @@ from backend.app.schemas.admin import (
     DefinitionValidationResponse,
     ExportBundle,
     ImportBundle,
+    AuditLogOut,
+    PublishPreviewOut,
+    RuleDiffOut,
+    AdminApplicationOut,
 )
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -149,6 +153,8 @@ def create_document_type(
         has_expiry=payload.has_expiry,
         default_validity_months=payload.default_validity_months,
         verification_method=payload.verification_method,
+        authority_adapter=payload.authority_adapter,
+        statutory_verification_applies=payload.statutory_verification_applies or False,
         extraction_schema=payload.extraction_schema,
         keywords=payload.keywords,
         is_active=payload.is_active,
@@ -354,9 +360,12 @@ def add_checklist_item(
     item = ChecklistItem(
         category_id=cat.id,
         document_type_id=payload.document_type_id,
+        ruleset_id=payload.ruleset_id,
+        institute_type=payload.institute_type or "ALL",
+        min_count=payload.min_count if payload.min_count is not None else 1,
         is_mandatory=payload.is_mandatory,
         condition=payload.condition,
-        min_validity_days_remaining=payload.min_validity_days_remaining,
+        min_validity_days_remaining=payload.min_validity_days_remaining or 30,
         max_age_days=payload.max_age_days,
         display_order=payload.display_order,
         help_text=payload.help_text,
@@ -652,7 +661,7 @@ def update_rule(
 
 
 @router.delete("/rules/{code}")
-def deactivate_or_archive_rule(
+def delete_rule(
     code: str,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
@@ -661,21 +670,94 @@ def deactivate_or_archive_rule(
     if not rule:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Rule not found.")
 
+    if rule.status != "DRAFT":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Rule '{code}' cannot be deleted because it is status '{rule.status}'. Only DRAFT rules can be deleted; published rules can only be deactivated.",
+        )
+
     prior_state = _rule_to_dict(rule)
-    rule.is_active = False
-    rule.status = "ARCHIVED"
-    rule.updated_by = current_user.id
+    db.delete(rule)
     db.commit()
 
     AuditService.log_event(
         db=db,
-        action="ARCHIVE_RULE",
+        action="DELETE_RULE",
         user_id=current_user.id,
         role=current_user.role,
-        reason=f"Archived rule {rule.code}",
-        details={"before": prior_state, "after": {"is_active": False, "status": "ARCHIVED"}},
+        reason=f"Deleted draft rule {code}",
+        details={"before": prior_state},
     )
-    return {"message": f"Rule '{code}' archived successfully."}
+    return {"message": f"Draft rule '{code}' deleted successfully."}
+
+
+@router.patch("/rules/{code}/toggle-active", response_model=RuleOut)
+def toggle_rule_active(
+    code: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    rule = db.query(Rule).filter(Rule.rule_code == code).first()
+    if not rule:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Rule not found.")
+
+    prior_active = rule.is_active
+    rule.is_active = not prior_active
+    rule.updated_by = current_user.id
+    db.commit()
+    db.refresh(rule)
+
+    AuditService.log_event(
+        db=db,
+        action="TOGGLE_RULE_ACTIVE",
+        user_id=current_user.id,
+        role=current_user.role,
+        reason=f"Toggled rule {rule.code} active state to {rule.is_active}",
+        details={"before": {"is_active": prior_active}, "after": {"is_active": rule.is_active}},
+    )
+    return rule
+
+
+@router.get("/rules/{code}/diff", response_model=RuleDiffOut)
+def get_rule_diff(
+    code: str,
+    v1: int = Query(..., description="First version number"),
+    v2: int = Query(..., description="Second version number"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin_or_reviewer),
+):
+    rule = db.query(Rule).filter(Rule.rule_code == code).first()
+    if not rule:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Rule not found.")
+
+    def get_snapshot(v_no: int) -> Dict[str, Any]:
+        if v_no == rule.current_version:
+            return _rule_to_dict(rule)
+        ver = db.query(RuleVersion).filter(RuleVersion.rule_id == rule.id, RuleVersion.version_no == v_no).first()
+        if not ver:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Version {v_no} not found for rule '{code}'.")
+        return ver.snapshot or {}
+
+    snap1 = get_snapshot(v1)
+    snap2 = get_snapshot(v2)
+
+    diffs: Dict[str, Dict[str, Any]] = {}
+    all_keys = set(snap1.keys()).union(set(snap2.keys()))
+    ignore_keys = {"id", "created_at", "updated_at", "created_by", "updated_by", "current_version"}
+    for k in sorted(all_keys):
+        if k in ignore_keys:
+            continue
+        val1 = snap1.get(k)
+        val2 = snap2.get(k)
+        if val1 != val2:
+            diffs[k] = {"from": val1, "to": val2}
+
+    return RuleDiffOut(
+        rule_code=code,
+        version_1=v1,
+        version_2=v2,
+        differences=diffs,
+    )
 
 
 @router.post("/rules/{code}/clone", response_model=RuleOut, status_code=status.HTTP_201_CREATED)
@@ -737,11 +819,43 @@ def clone_rule(
 @router.post("/rules/simulate", response_model=RuleSimulationResponse)
 def simulate_rule(
     payload: RuleSimulationRequest,
+    db: Session = Depends(get_db),
     current_user: User = Depends(require_admin_or_reviewer),
 ):
+    context_data = dict(payload.context or {})
+    evaluated_context_summary = None
+
+    if payload.application_id:
+        app_record = db.query(Application).filter(
+            (Application.id == payload.application_id) | (Application.application_id == str(payload.application_id))
+        ).first()
+        if app_record:
+            eval_ctx = ValidationRunner.build_evaluation_context(db, app_record)
+            base_ctx = {
+                "application": eval_ctx.application,
+                "institute": eval_ctx.institute,
+                "documents": eval_ctx.documents,
+                "courses": eval_ctx.courses,
+                "certificates": eval_ctx.certificates,
+                "verification": eval_ctx.verification,
+            }
+            # Deep merge / override with user-provided context
+            for k, v in context_data.items():
+                if isinstance(v, dict) and k in base_ctx and isinstance(base_ctx[k], dict):
+                    base_ctx[k].update(v)
+                else:
+                    base_ctx[k] = v
+            context_data = base_ctx
+            evaluated_context_summary = {
+                "application_id": app_record.application_id,
+                "category": eval_ctx.application.get("category"),
+                "documents_count": len(eval_ctx.documents),
+                "institute_name": eval_ctx.institute.get("name"),
+            }
+
     finding = RuleEngine.simulate(
         definition=payload.definition,
-        context_data=payload.context,
+        context_data=context_data,
         rule_meta=payload.rule_meta,
     )
     return RuleSimulationResponse(
@@ -751,6 +865,7 @@ def simulate_rule(
         rule_code=finding.rule_code,
         rule_title=finding.rule_title,
         severity=finding.severity,
+        evaluated_context_summary=evaluated_context_summary,
     )
 
 
@@ -814,17 +929,70 @@ def list_rulesets(
     return results
 
 
+@router.get("/rulesets/preview-publish", response_model=PublishPreviewOut)
+def preview_publish_ruleset(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin_or_reviewer),
+):
+    active_rs = db.query(RuleSet).filter(RuleSet.status == "ACTIVE").order_by(RuleSet.id.desc()).first()
+    active_snapshot_rules = {}
+    if active_rs and active_rs.snapshot and isinstance(active_rs.snapshot, dict):
+        for r in active_rs.snapshot.get("rules", []):
+            code = r.get("code") or r.get("rule_code")
+            if code:
+                active_snapshot_rules[code] = r
+
+    current_rules = db.query(Rule).filter(Rule.is_active == True).all()
+    new_rules = []
+    modified_rules = []
+    unchanged_count = 0
+
+    for r in current_rules:
+        code = r.code
+        r_dict = _rule_to_dict(r)
+        if code not in active_snapshot_rules:
+            new_rules.append(r_dict)
+        else:
+            old_snap = active_snapshot_rules[code]
+            changed_fields = []
+            for field in ["title", "definition", "severity", "rule_type", "mandatory", "applies_to_categories", "status"]:
+                if old_snap.get(field) != r_dict.get(field):
+                    changed_fields.append(field)
+            if changed_fields or r.status == "DRAFT":
+                modified_rules.append({**r_dict, "changed_fields": changed_fields})
+            else:
+                unchanged_count += 1
+
+    cats_count = db.query(ApplicationCategory).filter(ApplicationCategory.is_active == True).count()
+    checklists_count = db.query(ChecklistItem).filter(ChecklistItem.is_active == True).count()
+    doc_types_count = db.query(DocumentType).filter(DocumentType.is_active == True).count()
+
+    return PublishPreviewOut(
+        active_ruleset_name=active_rs.name if active_rs else None,
+        active_ruleset_version=active_rs.version_label if active_rs else None,
+        current_active_rules_count=len(active_snapshot_rules),
+        new_rules=new_rules,
+        modified_rules=modified_rules,
+        unchanged_rules_count=unchanged_count,
+        total_rules_to_publish=len(current_rules),
+        total_categories_count=cats_count,
+        total_checklists_count=checklists_count,
+        total_document_types_count=doc_types_count,
+    )
+
+
 @router.post("/rulesets/publish", response_model=RuleSetOut)
 def publish_ruleset(
     payload: RuleSetPublishRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
 ):
-    # Fetch all active published rules
-    active_rules = db.query(Rule).filter(Rule.is_active == True, Rule.status == "PUBLISHED").all()
-    if not active_rules:
-        # If no published rules, allow draft rules to be marked published or published as is
-        active_rules = db.query(Rule).filter(Rule.is_active == True).all()
+    # Retrieve all active rules and promote any DRAFT to PUBLISHED
+    active_rules = db.query(Rule).filter(Rule.is_active == True).all()
+    for r in active_rules:
+        if r.status != "PUBLISHED":
+            r.status = "PUBLISHED"
+            r.updated_by = current_user.id
 
     doc_types = db.query(DocumentType).filter(DocumentType.is_active == True).all()
     categories = db.query(ApplicationCategory).filter(ApplicationCategory.is_active == True).all()
@@ -842,6 +1010,8 @@ def publish_ruleset(
                 "issuing_authority": dt.issuing_authority,
                 "has_expiry": dt.has_expiry,
                 "verification_method": dt.verification_method,
+                "authority_adapter": dt.authority_adapter,
+                "statutory_verification_applies": dt.statutory_verification_applies,
             }
             for dt in doc_types
         ],
@@ -851,6 +1021,9 @@ def publish_ruleset(
                 "id": ci.id,
                 "category_id": ci.category_id,
                 "document_type_id": ci.document_type_id,
+                "ruleset_id": ci.ruleset_id,
+                "institute_type": ci.institute_type,
+                "min_count": ci.min_count,
                 "is_mandatory": ci.is_mandatory,
                 "display_order": ci.display_order,
             }
@@ -1723,6 +1896,52 @@ def get_admin_application_evidence_graph(
 
     graph_data = EvidenceGraphBuilder.build_graph(db=db, application_id=app.id, is_admin=True)
     return graph_data
+
+
+# ==============================================================================
+# AUDIT LOGS & APPLICATION SELECTOR
+# ==============================================================================
+
+@router.get("/applications", response_model=List[AdminApplicationOut])
+def list_admin_applications(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin_or_reviewer),
+):
+    apps = db.query(Application).order_by(Application.id.desc()).limit(100).all()
+    results = []
+    for a in apps:
+        inst = db.query(Institute).filter(Institute.id == a.institute_id).first()
+        results.append(
+            AdminApplicationOut(
+                id=a.id,
+                application_id=a.application_id,
+                institute_id=a.institute_id,
+                institute_name=inst.name if inst else "Unknown Institute",
+                category=a.category or "General",
+                academic_year=a.academic_year or "2026-2027",
+                status=a.status or "SUBMITTED",
+                filed_on=a.filed_on,
+            )
+        )
+    return results
+
+
+@router.get("/audit-logs", response_model=List[AuditLogOut])
+def list_audit_logs(
+    action: Optional[str] = None,
+    user_id: Optional[int] = None,
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin_or_reviewer),
+):
+    query = db.query(AuditLog)
+    if action:
+        query = query.filter(AuditLog.action.ilike(f"%{action}%"))
+    if user_id:
+        query = query.filter(AuditLog.user_id == user_id)
+    return query.order_by(AuditLog.id.desc()).offset(offset).limit(limit).all()
+
 
 
 

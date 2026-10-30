@@ -14,6 +14,13 @@ import { ValidationPage } from './pages/institute/ValidationPage';
 import { ComplaintsPage } from './pages/institute/ComplaintsPage';
 import { ReportsPage } from './pages/institute/ReportsPage';
 import { AdminDashboard } from './pages/AdminDashboard';
+import { AdminLayout } from './components/AdminLayout';
+import { AdminRulesPage } from './pages/admin/AdminRulesPage';
+import { AdminDocumentTypesPage } from './pages/admin/AdminDocumentTypesPage';
+import { AdminChecklistsPage } from './pages/admin/AdminChecklistsPage';
+import { AdminAuditLogPage } from './pages/admin/AdminAuditLogPage';
+import { AdminReportsPage } from './pages/admin/AdminReportsPage';
+import { ComingSoonPage } from './pages/admin/ComingSoonPage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -88,15 +95,56 @@ export const App: React.FC = () => {
               <Route path="reports" element={<ReportsPage />} />
             </Route>
 
-            {/* Admin Portal Protected Route */}
+            {/* Admin Portal Protected Routes with Shared Admin Layout */}
             <Route
-              path="/admin/dashboard"
+              path="/admin"
               element={
                 <ProtectedRoute allowedRoles={['ADMIN', 'REVIEWER']}>
-                  <AdminDashboard />
+                  <AdminLayout />
                 </ProtectedRoute>
               }
-            />
+            >
+              <Route index element={<Navigate to="/admin/dashboard" replace />} />
+              <Route path="dashboard" element={<AdminDashboard />} />
+              <Route path="rules" element={<AdminRulesPage />} />
+              <Route path="document-types" element={<AdminDocumentTypesPage />} />
+              <Route path="checklists" element={<AdminChecklistsPage />} />
+              <Route
+                path="verification-queue"
+                element={
+                  <ComingSoonPage
+                    title="Statutory Verification Queue"
+                    moduleName="Verification Queue"
+                    stage="Stage 8-ii"
+                    description="Manual and automated verification queue for statutory external authorities (UGC, Registrar, SWAYAM, Fire, Land Registry)."
+                  />
+                }
+              />
+              <Route
+                path="anomalies"
+                element={
+                  <ComingSoonPage
+                    title="Anomaly Review & Evidence Graph"
+                    moduleName="Anomaly Review"
+                    stage="Stage 8-ii"
+                    description="Scrutiny official review console for items flagged as 'needs verification' or 'potential anomaly' across computer vision and metadata detectors."
+                  />
+                }
+              />
+              <Route
+                path="complaints"
+                element={
+                  <ComingSoonPage
+                    title="Complaints Management Inbox"
+                    moduleName="Complaints Inbox"
+                    stage="Stage 8-ii"
+                    description="Administrative resolution inbox for stakeholder grievances and regulatory compliance queries."
+                  />
+                }
+              />
+              <Route path="reports" element={<AdminReportsPage />} />
+              <Route path="audit-log" element={<AdminAuditLogPage />} />
+            </Route>
 
             {/* Fallback */}
             <Route path="*" element={<Navigate to="/login" replace />} />

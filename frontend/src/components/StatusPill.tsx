@@ -17,14 +17,17 @@ export const StatusPill: React.FC<StatusPillProps> = ({ status, className = '' }
     norm === 'resolved' ||
     norm === 'verified' ||
     norm === 'done' ||
-    norm === 'ready'
+    norm === 'ready' ||
+    norm === 'published' ||
+    norm === 'active'
   ) {
-    // Valid / Done / Ready: green text on #E2F6E6
+    // Valid / Done / Ready / Published / Active: green text on #E2F6E6
     bgClass = 'bg-[#E2F6E6] text-[#1E7036]';
   } else if (
     norm === 'expiring soon' ||
     norm === 'expiring_soon' ||
     norm === 'warning' ||
+    norm === 'major' ||
     norm === 'submitted' ||
     norm === 'in progress' ||
     norm === 'needs attention' ||
@@ -37,7 +40,7 @@ export const StatusPill: React.FC<StatusPillProps> = ({ status, className = '' }
     norm === 'manual review required' ||
     norm === 'manual_review_required'
   ) {
-    // Expiring Soon / Needs Attention / Source Unavailable / Manual Review: orange text on #FFF0D6
+    // Expiring Soon / Needs Attention / Source Unavailable / Manual Review / Warning: orange text on #FFF0D6
     bgClass = 'bg-[#FFF0D6] text-[#B85700]';
   } else if (
     norm === 'expired' ||
@@ -47,9 +50,10 @@ export const StatusPill: React.FC<StatusPillProps> = ({ status, className = '' }
     norm === 'failed' ||
     norm.startsWith('failed') ||
     norm === 'mismatch detected' ||
-    norm === 'mismatch_detected'
+    norm === 'mismatch_detected' ||
+    norm === 'blocker'
   ) {
-    // Expired / Failed / Missing / Mismatch: red text on #FDE7E9
+    // Expired / Failed / Missing / Mismatch / Blocker: red text on #FDE7E9
     bgClass = 'bg-[#FDE7E9] text-[#C62828]';
   } else if (norm === 'draft' || norm === 'uploaded' || norm === 'open') {
     // Draft/Uploaded: subtle lavender on #ECE8FB
@@ -58,10 +62,16 @@ export const StatusPill: React.FC<StatusPillProps> = ({ status, className = '' }
     norm === 'processing' ||
     norm === 'pending' ||
     norm === 'verification pending' ||
-    norm === 'verification_pending'
+    norm === 'verification_pending' ||
+    norm === 'info' ||
+    norm === 'minor' ||
+    norm === 'advisory'
   ) {
-    // Processing / Pending: blue on #E3F0FF
+    // Processing / Pending / Info / Advisory: blue on #E3F0FF
     bgClass = 'bg-[#E3F0FF] text-[#0B3C9D]';
+  } else if (norm === 'archived' || norm === 'inactive') {
+    // Archived / Inactive: slate
+    bgClass = 'bg-slate-200 text-slate-700';
   }
 
   return (

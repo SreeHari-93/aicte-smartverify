@@ -10,6 +10,9 @@ class ChecklistItem(Base):
     id = Column(Integer, primary_key=True, index=True)
     category_id = Column(Integer, ForeignKey("application_categories.id"), nullable=False, index=True)
     document_type_id = Column(Integer, ForeignKey("document_types.id"), nullable=False, index=True)
+    ruleset_id = Column(Integer, ForeignKey("rulesets.id"), nullable=True, index=True)
+    institute_type = Column(String(100), default="ALL", nullable=True)  # ALL | ENGINEERING | MANAGEMENT | PHARMACY | ARCHITECTURE
+    min_count = Column(Integer, default=1, nullable=False)
     is_mandatory = Column(Boolean, default=True, nullable=False)
     condition = Column(JSON, default=dict, nullable=True)  # optional condition when this checklist item triggers
     min_validity_days_remaining = Column(Integer, default=30, nullable=False)
@@ -22,4 +25,5 @@ class ChecklistItem(Base):
 
     category = relationship("ApplicationCategory", back_populates="checklist_items")
     document_type = relationship("DocumentType")
+    ruleset = relationship("RuleSet")
 

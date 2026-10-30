@@ -65,8 +65,10 @@ export const TopBar: React.FC<TopBarProps> = ({ onToggleSidebar, isSidebarOpen }
     }
   };
 
-  const instituteDisplayName =
-    user?.institute?.name || user?.email?.split('@')[0] || 'SRI KRISHNA COLLEGE OF ENGINEERING AND TECHNOLOGY';
+  const isAdmin = user?.role === 'ADMIN' || user?.role === 'REVIEWER';
+  const instituteDisplayName = isAdmin
+    ? (user?.email || 'CENTRAL ADMINISTRATOR')
+    : (user?.institute?.name || user?.email?.split('@')[0] || 'SRI KRISHNA COLLEGE OF ENGINEERING AND TECHNOLOGY');
 
   return (
     <header className="h-24 bg-[#E8650A] text-white flex items-center justify-between px-4 sm:px-6 z-40 sticky top-0 shadow-md select-none">
@@ -172,7 +174,7 @@ export const TopBar: React.FC<TopBarProps> = ({ onToggleSidebar, isSidebarOpen }
                 {instituteDisplayName}
               </span>
               <span className="text-[10px] text-white/80 uppercase tracking-wider mt-0.5">
-                AICTE ID: {user?.institute?.aicte_institute_id || 'SKCET01'}
+                {isAdmin ? `SECURITY ROLE: ${user?.role || 'ADMIN'}` : `AICTE ID: ${user?.institute?.aicte_institute_id || 'SKCET01'}`}
               </span>
             </div>
 

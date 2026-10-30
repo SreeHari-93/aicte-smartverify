@@ -17,6 +17,9 @@ class DocumentType(Base):
     default_validity_months = Column(Integer, default=12, nullable=False)
     # Verification methods: QR | API | PORTAL | DIGITAL_SIGNATURE | MANUAL
     verification_method = Column(String(50), default="MANUAL", nullable=False)
+    # Authority adapter: e.g. AICTE_PORTAL, SWAYAM, LAND_REGISTRY, FIRE_AUTHORITY, PWD, MOCK_GOV, QR, API
+    authority_adapter = Column(String(100), nullable=True)
+    statutory_verification_applies = Column(Boolean, default=False, nullable=True)
     # extraction_schema: JSON list of {key, label, type [text|date|number|id], required}
     extraction_schema = Column(JSON, default=list, nullable=False)
     # keywords: JSON list of string tokens for document classification in later stages
