@@ -91,11 +91,13 @@ class RootCauseAnalyzer:
         title_lower = title.lower()
 
         # 1. Document pipeline specific prefixes
+        if rule_code.startswith("DOC_EXP_SOON_"):
+            return "EXPIRING_SOON"
         if rule_code.startswith("DOC_EXP_"):
             return "EXPIRED_DOCUMENT"
         if rule_code.startswith("DOC_DUP_"):
             return "ANOMALY_FLAG"
-        if rule_code.startswith("DOC_MISMATCH_"):
+        if rule_code.startswith("DOC_MISMATCH_") or rule_code.startswith("DOC_NAME_MISMATCH_"):
             return "DATA_MISMATCH"
 
         # 2. Check for missing document first across all rules (a missing document causes cascade failures)
@@ -189,7 +191,7 @@ class RootCauseAnalyzer:
 
         # 3. Check rule_code suffix (e.g., DOC_EXP_FIRE_SAFETY -> FIRE_SAFETY)
         rule_code = str(getattr(finding, "rule_code", "") or "")
-        for pfx in ("DOC_EXP_", "DOC_DUP_", "DOC_MISMATCH_"):
+        for pfx in ("DOC_EXP_SOON_", "DOC_EXP_", "DOC_DUP_", "DOC_MISMATCH_", "DOC_NAME_MISMATCH_"):
             if rule_code.startswith(pfx):
                 return rule_code[len(pfx):].strip().upper()
 
