@@ -84,12 +84,22 @@ def run_stage5_demo():
             db.add(dt_fire)
         db.commit()
 
-        # Helper to register or update a test Document in DB
-        def register_test_doc(filename, filepath, type_code, extracted_dict, sha_seed=None):
+        # Clean previous demo test document runs to ensure clean isolated demonstration
+        db.query(Document).filter(
+            Document.institute_id == inst.id,
+            Document.original_filename.in_([
+                "clean_sample.pdf", "edited_date_sample.pdf", "duplicate_sample.pdf",
+                "tampered_stamp_sample.pdf", "suspicious_metadata_sample.pdf", "conflict_sample.pdf"
+            ])
+        ).delete(synchronize_session=False)
+        db.commit()
+
+        # Helper to register or update a test Document in DB using true file bytes SHA-256
+        def register_test_doc(filename, filepath, type_code, extracted_dict):
             with open(filepath, "rb") as f:
                 content = f.read()
+            # Compute real SHA-256 hash strictly from file bytes
             real_hash = hashlib.sha256(content).hexdigest()
-            doc_hash = sha_seed if sha_seed else real_hash
 
             doc = (
                 db.query(Document)
@@ -106,7 +116,7 @@ def run_stage5_demo():
                     file_path=filepath,
                     file_size=len(content),
                     mime_type="application/pdf",
-                    sha256_hash=doc_hash,
+                    sha256_hash=real_hash,
                     status="Processing",
                     extracted_data=extracted_dict,
                 )
@@ -114,7 +124,7 @@ def run_stage5_demo():
             else:
                 doc.file_path = filepath
                 doc.file_size = len(content)
-                doc.sha256_hash = doc_hash
+                doc.sha256_hash = real_hash
                 doc.extracted_data = extracted_dict
             db.commit()
             db.refresh(doc)
@@ -138,17 +148,14 @@ def run_stage5_demo():
                 "institute_name": "Sri Krishna College of Engineering and Technology",
                 "aicte_institute_id": "SKCET01",
             },
-            sha_seed="unique_clean_sample_sha256_hash",
         )
-        print(f"Filename: {doc_clean.original_filename} | Doc ID: #{doc_clean.id}")
+        print(f"Filename: {doc_clean.original_filename} | Doc ID: #{doc_clean.id} | SHA-256: {doc_clean.sha256_hash[:16]}...")
         run_clean, flags_clean = AnomalyService.scan_document(db=db, document_id=doc_clean.id)
-        # Filter duplicate flags against itself if re-running
-        pure_clean_flags = [f for f in flags_clean if "duplicate" not in f.code.lower()]
-        if not pure_clean_flags:
+        if not flags_clean:
             print("  [OK] NO ANOMALIES DETECTED — Document passes preliminary automated screening.")
         else:
-            for idx, flag in enumerate(pure_clean_flags, 1):
-                print(f"  Flag #{idx}: [{flag.severity}] {flag.detector} :: {flag.code} -> {flag.reason}")
+            for idx, flag in enumerate(flags_clean, 1):
+                print(f"  Flag #{idx}: [{flag.severity}] [{flag.group_key}] {flag.detector} :: {flag.code} -> {flag.reason}")
 
         # -------------------------------------------------------------
         # Scenario 2: Date Anomaly (Issue > Expiry & Future)
@@ -167,10 +174,10 @@ def run_stage5_demo():
                 "aicte_institute_id": "SKCET01",
             },
         )
-        print(f"Filename: {doc_date.original_filename} | Doc ID: #{doc_date.id}")
+        print(f"Filename: {doc_date.original_filename} | Doc ID: #{doc_date.id} | SHA-256: {doc_date.sha256_hash[:16]}...")
         run_date, flags_date = AnomalyService.scan_document(db=db, document_id=doc_date.id)
         for idx, flag in enumerate(flags_date, 1):
-            print(f"  Flag #{idx}: [{flag.severity}] {flag.detector} :: {flag.code}")
+            print(f"  Flag #{idx}: [{flag.severity}] [{flag.group_key}] {flag.detector} :: {flag.code}")
             print(f"    Confidence: {flag.confidence} | Reason: {flag.reason}")
             print(f"    Action: {flag.recommended_action}")
 
@@ -190,12 +197,11 @@ def run_stage5_demo():
                 "institute_name": "Sri Krishna College of Engineering and Technology",
                 "aicte_institute_id": "SKCET01",
             },
-            sha_seed=doc_clean.sha256_hash,
         )
-        print(f"Filename: {doc_dup.original_filename} | Doc ID: #{doc_dup.id}")
+        print(f"Filename: {doc_dup.original_filename} | Doc ID: #{doc_dup.id} | SHA-256: {doc_dup.sha256_hash[:16]}...")
         run_dup, flags_dup = AnomalyService.scan_document(db=db, document_id=doc_dup.id)
         for idx, flag in enumerate(flags_dup, 1):
-            print(f"  Flag #{idx}: [{flag.severity}] {flag.detector} :: {flag.code}")
+            print(f"  Flag #{idx}: [{flag.severity}] [{flag.group_key}] {flag.detector} :: {flag.code}")
             print(f"    Reason: {flag.reason}")
             print(f"    Evidence: {flag.evidence_json}")
 
@@ -216,10 +222,10 @@ def run_stage5_demo():
                 "aicte_institute_id": "SKCET01",
             },
         )
-        print(f"Filename: {doc_tamper.original_filename} | Doc ID: #{doc_tamper.id}")
+        print(f"Filename: {doc_tamper.original_filename} | Doc ID: #{doc_tamper.id} | SHA-256: {doc_tamper.sha256_hash[:16]}...")
         run_tamper, flags_tamper = AnomalyService.scan_document(db=db, document_id=doc_tamper.id)
         for idx, flag in enumerate(flags_tamper, 1):
-            print(f"  Flag #{idx}: [{flag.severity}] {flag.detector} :: {flag.code}")
+            print(f"  Flag #{idx}: [{flag.severity}] [{flag.group_key}] {flag.detector} :: {flag.code}")
             print(f"    Reason: {flag.reason}")
             print(f"    Evidence: {flag.evidence_json}")
             if flag.overlay_image_path:
@@ -242,10 +248,10 @@ def run_stage5_demo():
                 "aicte_institute_id": "SKCET01",
             },
         )
-        print(f"Filename: {doc_meta.original_filename} | Doc ID: #{doc_meta.id}")
+        print(f"Filename: {doc_meta.original_filename} | Doc ID: #{doc_meta.id} | SHA-256: {doc_meta.sha256_hash[:16]}...")
         run_meta, flags_meta = AnomalyService.scan_document(db=db, document_id=doc_meta.id)
         for idx, flag in enumerate(flags_meta, 1):
-            print(f"  Flag #{idx}: [{flag.severity}] {flag.detector} :: {flag.code}")
+            print(f"  Flag #{idx}: [{flag.severity}] [{flag.group_key}] {flag.detector} :: {flag.code}")
             print(f"    Reason: {flag.reason}")
             print(f"    Evidence: {flag.evidence_json}")
 
@@ -264,7 +270,6 @@ def run_stage5_demo():
                 "expiry_date": "2029-10-27",
                 "institute_name": "Sri Krishna College of Engineering and Technology",
             },
-            sha_seed="unique_conflict_sha_seed",
         )
         existing_ver = db.query(VerificationResult).filter(VerificationResult.document_id == doc_conflict.id).first()
         if not existing_ver:
@@ -280,13 +285,13 @@ def run_stage5_demo():
             db.add(existing_ver)
             db.commit()
 
-        print(f"Filename: {doc_conflict.original_filename} | Doc ID: #{doc_conflict.id}")
+        print(f"Filename: {doc_conflict.original_filename} | Doc ID: #{doc_conflict.id} | SHA-256: {doc_conflict.sha256_hash[:16]}...")
         run_conflict, flags_conflict = AnomalyService.scan_document(db=db, document_id=doc_conflict.id)
         sample_flag_for_review = None
         for idx, flag in enumerate(flags_conflict, 1):
             if not sample_flag_for_review:
                 sample_flag_for_review = flag
-            print(f"  Flag #{idx}: [{flag.severity}] {flag.detector} :: {flag.code}")
+            print(f"  Flag #{idx}: [{flag.severity}] [{flag.group_key}] {flag.detector} :: {flag.code}")
             print(f"    Reason: {flag.reason}")
             print(f"    Evidence: {flag.evidence_json}")
 

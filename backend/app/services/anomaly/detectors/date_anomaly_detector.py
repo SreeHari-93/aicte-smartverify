@@ -41,6 +41,7 @@ class DateAnomalyDetector(BaseDetector):
                 AnomalyFlagDTO(
                     detector=self.name,
                     code="DATE_ISSUE_AFTER_EXPIRY",
+                    group_key="DATE_ANOMALY",
                     severity="HIGH",
                     reason=f"Stated issue date ({issue_d.isoformat()}) post-dates the stated expiry date ({expiry_d.isoformat()}); potential anomaly requiring verification.",
                     evidence=[{
@@ -60,6 +61,7 @@ class DateAnomalyDetector(BaseDetector):
                 AnomalyFlagDTO(
                     detector=self.name,
                     code="DATE_FUTURE_ISSUE",
+                    group_key="DATE_ANOMALY",
                     severity="HIGH",
                     reason=f"Certificate issue date ({issue_d.isoformat()}) is recorded in the future; needs verification.",
                     evidence=[{
@@ -79,12 +81,19 @@ class DateAnomalyDetector(BaseDetector):
             def_months = context.doc_type.default_validity_months
             max_allowed = int(def_months * settings.ANOMALY_DATE_MAX_VALIDITY_MONTHS_RATIO)
             if months > max_allowed or months < 1:
+                doc_label = context.doc_type.name or context.doc_type.code
+                if expiry_d < issue_d:
+                    validity_reason = f"Document validity period shows expiry date is earlier than issue date for {doc_label}; potential anomaly requiring verification."
+                else:
+                    validity_reason = f"Document validity duration ({months} months) differs substantially from standard {def_months}-month statutory period for {doc_label}; potential anomaly requiring verification."
+
                 flags.append(
                     AnomalyFlagDTO(
                         detector=self.name,
                         code="DATE_UNUSUAL_VALIDITY_PERIOD",
+                        group_key="DATE_ANOMALY",
                         severity="MEDIUM",
-                        reason=f"Document validity duration ({months} months) differs substantially from standard {def_months}-month statutory period for {context.doc_type.name or context.doc_type.code}; potential anomaly requiring verification.",
+                        reason=validity_reason,
                         evidence=[{
                             "document_id": doc.id,
                             "field": "validity_months",
@@ -104,6 +113,7 @@ class DateAnomalyDetector(BaseDetector):
                     AnomalyFlagDTO(
                         detector=self.name,
                         code="DATE_WEEKEND_ISSUE",
+                        group_key="DATE_ANOMALY",
                         severity="LOW",
                         reason=f"Document issue date ({issue_d.isoformat()}, {day_name}) falls on a weekend; potential anomaly requiring verification.",
                         evidence=[{
@@ -121,6 +131,7 @@ class DateAnomalyDetector(BaseDetector):
                     AnomalyFlagDTO(
                         detector=self.name,
                         code="DATE_IMPLAUSIBLE",
+                        group_key="DATE_ANOMALY",
                         severity="LOW",
                         reason=f"Document issue date ({issue_d.isoformat()}) appears implausible; needs verification.",
                         evidence=[{

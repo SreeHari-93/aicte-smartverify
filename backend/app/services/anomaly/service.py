@@ -15,6 +15,24 @@ from backend.app.services.audit_service import AuditService
 
 class AnomalyService:
     @classmethod
+    def _resolve_group_key(cls, dto) -> str:
+        if getattr(dto, "group_key", None):
+            return dto.group_key
+        if dto.detector == "DateAnomalyDetector":
+            return "DATE_ANOMALY"
+        elif dto.detector == "DuplicateDetector":
+            return "DUPLICATE"
+        elif dto.detector == "MetadataDetector":
+            return "METADATA"
+        elif dto.detector == "ImageTamperDetector":
+            return "TAMPER"
+        elif dto.detector == "IdentifierDetector":
+            return "IDENTIFIER"
+        elif dto.detector == "VerificationConflictDetector":
+            return "VERIFICATION_CONFLICT"
+        return "GENERAL"
+
+    @classmethod
     def get_document_extracted_fields(cls, db: Session, doc: Document) -> Dict[str, Any]:
         """Collects extracted fields from document attributes and ExtractedField entities."""
         data = dict(doc.extracted_data or {})
@@ -82,6 +100,7 @@ class AnomalyService:
                         document_id=doc.id,
                         detector=dto.detector,
                         code=dto.code,
+                        group_key=cls._resolve_group_key(dto),
                         severity=dto.severity,
                         reason=dto.reason,
                         evidence_json=dto.evidence,
@@ -181,6 +200,7 @@ class AnomalyService:
                             document_id=doc.id,
                             detector=dto.detector,
                             code=dto.code,
+                            group_key=cls._resolve_group_key(dto),
                             severity=dto.severity,
                             reason=dto.reason,
                             evidence_json=dto.evidence,

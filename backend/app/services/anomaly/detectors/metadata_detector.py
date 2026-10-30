@@ -73,6 +73,7 @@ class MetadataDetector(BaseDetector):
                 AnomalyFlagDTO(
                     detector=self.name,
                     code="METADATA_SUSPICIOUS_PRODUCER",
+                    group_key="METADATA",
                     severity="MEDIUM",
                     reason=f"PDF metadata identifies design or editing software ('{editor_name}'); potential anomaly requiring verification.",
                     evidence=[{
@@ -96,6 +97,7 @@ class MetadataDetector(BaseDetector):
                     AnomalyFlagDTO(
                         detector=self.name,
                         code="METADATA_CREATION_POSTDATES_ISSUE",
+                        group_key="METADATA",
                         severity="MEDIUM",
                         reason=f"Digital PDF creation date ({c_date.isoformat()}) post-dates stated certificate issue date ({issue_d.isoformat()}); potential anomaly requiring verification.",
                         evidence=[{
@@ -115,6 +117,7 @@ class MetadataDetector(BaseDetector):
                 AnomalyFlagDTO(
                     detector=self.name,
                     code="METADATA_POST_CREATION_MODIFIED",
+                    group_key="METADATA",
                     severity="LOW",
                     reason="PDF metadata indicates document modification after initial generation; needs verification.",
                     evidence=[{
@@ -134,6 +137,7 @@ class MetadataDetector(BaseDetector):
                 AnomalyFlagDTO(
                     detector=self.name,
                     code="METADATA_MISSING_HEADERS",
+                    group_key="METADATA",
                     severity="INFO",
                     reason="Standard PDF document metadata attributes are absent; needs verification.",
                     evidence=[{

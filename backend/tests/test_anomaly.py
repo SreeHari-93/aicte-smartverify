@@ -197,11 +197,26 @@ def test_each_detector_flags_target_and_not_clean(db_session: Session, anomaly_f
             "expiry_date": "2025-06-30",
         },
     )
-    ctx_date = DetectionContext(db=db_session, document=date_doc, extracted_fields=date_doc.extracted_data)
+    ctx_date = DetectionContext(
+        db=db_session,
+        document=date_doc,
+        doc_type=anomaly_fixture["dt_nba"],
+        extracted_fields=date_doc.extracted_data,
+    )
     date_flags = DateAnomalyDetector().detect(ctx_date)
     date_codes = [f.code for f in date_flags]
     assert "DATE_ISSUE_AFTER_EXPIRY" in date_codes
     assert "DATE_FUTURE_ISSUE" in date_codes
+    assert "DATE_UNUSUAL_VALIDITY_PERIOD" in date_codes
+
+    # Verify group_key is set on all date flags
+    for df in date_flags:
+        assert df.group_key == "DATE_ANOMALY"
+
+    # Verify that when expiry is before issue, reason states "expiry date is earlier than issue date" and not "-N months"
+    validity_flag = next(f for f in date_flags if f.code == "DATE_UNUSUAL_VALIDITY_PERIOD")
+    assert "expiry date is earlier than issue date" in validity_flag.reason
+    assert "months" not in validity_flag.reason.lower() or "duration (" not in validity_flag.reason
 
     # 3. Duplicate Detector
     dup_doc = Document(
@@ -396,12 +411,14 @@ def test_institute_isolation_on_anomaly_endpoints(client, anomaly_fixture, db_se
     assert "flags" in scan_data
     for flag_item in scan_data["flags"]:
         assert "confidence" not in flag_item, "Internal confidence score must NOT be exposed to institute"
+        assert "group_key" in flag_item, "group_key must be present in API output"
 
     res_doc_b = client.get(f"/api/institute/documents/{doc_b.id}/anomalies")
     assert res_doc_b.status_code == 200
     doc_flags = res_doc_b.json()
     for f in doc_flags:
         assert "confidence" not in f, "Confidence score must be omitted from institute document view"
+        assert "group_key" in f, "group_key must be present in API output"
 
 
 def test_admin_review_requires_note_and_logs_audit(client, anomaly_fixture, db_session: Session):

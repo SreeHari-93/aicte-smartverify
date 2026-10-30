@@ -46,6 +46,7 @@ class AnomalyFlag(Base):
     document_id = Column(Integer, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True)
     detector = Column(String(100), nullable=False, index=True)  # DuplicateDetector, MetadataDetector, etc.
     code = Column(String(100), nullable=False, index=True)      # Specific check code
+    group_key = Column(String(50), nullable=True, index=True)   # Logical grouping key (e.g. DATE_ANOMALY, DUPLICATE)
     severity = Column(String(20), nullable=False)               # INFO, LOW, MEDIUM, HIGH
     reason = Column(Text, nullable=False)                       # Human-readable reason ("needs verification", "potential anomaly")
     evidence_json = Column(JSON, default=list, nullable=False)  # List of {document_id, page, field, bbox, value, expected}

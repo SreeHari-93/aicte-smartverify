@@ -43,6 +43,7 @@ def upgrade() -> None:
         sa.Column('document_id', sa.Integer(), nullable=False),
         sa.Column('detector', sa.String(length=100), nullable=False),
         sa.Column('code', sa.String(length=100), nullable=False),
+        sa.Column('group_key', sa.String(length=50), nullable=True),
         sa.Column('severity', sa.String(length=20), nullable=False),
         sa.Column('reason', sa.Text(), nullable=False),
         sa.Column('evidence_json', sa.JSON(), nullable=False),

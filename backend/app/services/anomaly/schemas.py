@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 class AnomalyFlagDTO(BaseModel):
     detector: str
     code: str
+    group_key: Optional[str] = None
     severity: str  # INFO, LOW, MEDIUM, HIGH
     reason: str
     evidence: List[Dict[str, Any]] = Field(default_factory=list)
@@ -25,6 +26,7 @@ class AnomalyFlagOut(BaseModel):
     document_id: int
     detector: str
     code: str
+    group_key: Optional[str] = None
     severity: str
     reason: str
     evidence_json: List[Dict[str, Any]]
@@ -51,6 +53,7 @@ class InstituteAnomalyFlagOut(BaseModel):
     document_id: int
     detector: str
     code: str
+    group_key: Optional[str] = None
     severity: str
     reason: str
     recommended_action: str

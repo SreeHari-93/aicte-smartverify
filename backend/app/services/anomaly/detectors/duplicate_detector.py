@@ -52,6 +52,7 @@ class DuplicateDetector(BaseDetector):
                     AnomalyFlagDTO(
                         detector=self.name,
                         code="EXACT_HASH_DUPLICATE",
+                        group_key="DUPLICATE",
                         severity="HIGH",
                         reason=f"Identical SHA-256 file hash matches document #{exact_dup.id} ('{exact_dup.original_filename}'); potential anomaly requiring verification.",
                         evidence=[{
@@ -103,6 +104,7 @@ class DuplicateDetector(BaseDetector):
                                 AnomalyFlagDTO(
                                     detector=self.name,
                                     code="VISUAL_NEAR_DUPLICATE",
+                                    group_key="DUPLICATE",
                                     severity="MEDIUM",
                                     reason=f"Visual layout perceptual hash closely matches document #{cand.id} ('{cand.original_filename}') with distance {h_dist}; potential anomaly requiring verification.",
                                     evidence=[{
@@ -131,6 +133,7 @@ class DuplicateDetector(BaseDetector):
                             AnomalyFlagDTO(
                                 detector=self.name,
                                 code="TEXT_NEAR_DUPLICATE",
+                                group_key="DUPLICATE",
                                 severity="MEDIUM",
                                 reason=f"Extracted document text exhibits {int(sim * 100)}% similarity with document #{cand.id} ('{cand.original_filename}'); potential anomaly requiring verification.",
                                 evidence=[{
