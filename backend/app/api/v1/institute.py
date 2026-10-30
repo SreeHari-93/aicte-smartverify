@@ -40,6 +40,8 @@ from backend.app.services.verification import (
 from backend.app.services.anomaly import (
     AnomalyService,
     InstituteAnomalyFlagOut,
+    EvidenceGraphBuilder,
+    EvidenceGraphResponse,
 )
 from backend.app.api.deps import get_current_user
 
@@ -1732,5 +1734,73 @@ def get_institute_document_anomalies(
 
     flags = AnomalyService.get_flags_for_document(db=db, document_id=doc.id)
     return [InstituteAnomalyFlagOut.model_validate(f) for f in flags]
+
+
+@router.get("/applications/{application_id}/evidence-graph", response_model=EvidenceGraphResponse)
+def get_institute_application_evidence_graph(
+    application_id: Union[int, str],
+    user: User = Depends(get_current_institute_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Builds the multi-entity cross-document evidence graph for an application.
+    Enforces institute isolation.
+    Outputs preliminary indicators worded as 'needs verification' with NO internal confidence scores.
+    """
+    app = None
+    if isinstance(application_id, int) or (isinstance(application_id, str) and application_id.isdigit()):
+        app = db.query(Application).filter(Application.id == int(application_id)).first()
+    if not app:
+        app = db.query(Application).filter(Application.application_id == str(application_id)).first()
+
+    if not app:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Application '{application_id}' not found.",
+        )
+
+    if app.institute_id != user.institute_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Forbidden: Application does not belong to your institute.",
+        )
+
+    graph_data = EvidenceGraphBuilder.build_graph(db=db, application_id=app.id, is_admin=False)
+    return graph_data
+
+
+@router.get("/documents/{document_id}/anomalies/{flag_id}/overlay")
+def get_institute_anomaly_overlay_image(
+    document_id: int,
+    flag_id: int,
+    user: User = Depends(get_current_institute_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Stream the visual heatmap / bounding-box overlay PNG for an anomaly flag.
+    Enforces institute isolation.
+    """
+    doc = db.query(Document).filter(Document.id == document_id).first()
+    if not doc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Document #{document_id} not found.",
+        )
+
+    if doc.institute_id != user.institute_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Forbidden: Document does not belong to your institute.",
+        )
+
+    from backend.app.models.anomaly import AnomalyFlag
+    flag = db.query(AnomalyFlag).filter(AnomalyFlag.id == flag_id, AnomalyFlag.document_id == doc.id).first()
+    if not flag or not flag.overlay_image_path or not os.path.exists(flag.overlay_image_path):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No overlay image available for anomaly flag #{flag_id}.",
+        )
+
+    return FileResponse(flag.overlay_image_path, media_type="image/png")
 
 

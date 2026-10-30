@@ -4,8 +4,12 @@ from backend.app.services.anomaly.schemas import (
     InstituteAnomalyFlagOut,
     AnomalyReviewRequest,
     AnomalyRunOut,
+    EvidenceGraphResponse,
+    EvidenceGraphNode,
+    EvidenceGraphEdge,
 )
 from backend.app.services.anomaly.service import AnomalyService
+from backend.app.services.anomaly.evidence_graph import EvidenceGraphBuilder
 
 __all__ = [
     "AnomalyFlagDTO",
@@ -13,6 +17,10 @@ __all__ = [
     "InstituteAnomalyFlagOut",
     "AnomalyReviewRequest",
     "AnomalyRunOut",
+    "EvidenceGraphResponse",
+    "EvidenceGraphNode",
+    "EvidenceGraphEdge",
     "AnomalyService",
+    "EvidenceGraphBuilder",
 ]
 

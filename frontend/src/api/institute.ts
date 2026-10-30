@@ -564,7 +564,88 @@ export const instituteApi = {
     const res = await apiClient.get<WhyFailedData>(`/api/institute/applications/${appId}/why-failed?lang=${lang}`);
     return res.data;
   },
+
+  getEvidenceGraph: async (appId: string | number): Promise<EvidenceGraphData> => {
+    const res = await apiClient.get<EvidenceGraphData>(`/api/institute/applications/${appId}/evidence-graph`);
+    return res.data;
+  },
+
+  getDocumentAnomalies: async (docId: number): Promise<InstituteAnomalyFlag[]> => {
+    const res = await apiClient.get<InstituteAnomalyFlag[]>(`/api/institute/documents/${docId}/anomalies`);
+    return res.data;
+  },
+
+  getAnomalyOverlayUrl: (docId: number, flagId: number): string => {
+    return `/api/institute/documents/${docId}/anomalies/${flagId}/overlay`;
+  },
+
+  runAnomalyScan: async (appId: string | number) => {
+    const res = await apiClient.post(`/api/institute/applications/${appId}/anomaly-scan`);
+    return res.data;
+  },
 };
+
+export interface EvidenceGraphNode {
+  id: string;
+  type: 'institute' | 'application' | 'document' | 'field' | 'verification' | 'anomaly_flag' | string;
+  label: string;
+  properties: Record<string, any>;
+}
+
+export interface EvidenceGraphEdge {
+  id: string;
+  source: string;
+  target: string;
+  type: string;
+  label: string;
+  properties?: Record<string, any>;
+}
+
+export interface EvidenceGraphConflict {
+  type: string;
+  field: string;
+  doc_id_1: number;
+  doc_id_2: number;
+  doc_file_1: string;
+  doc_file_2: string;
+  value_1: any;
+  value_2: any;
+  reason: string;
+}
+
+export interface EvidenceGraphSummary {
+  node_count: number;
+  edge_count: number;
+  conflict_count: number;
+  anomaly_flag_count: number;
+  documents_count: number;
+}
+
+export interface EvidenceGraphData {
+  application_id: string;
+  application_pk: number;
+  institute_id: number;
+  institute_name: string;
+  nodes: EvidenceGraphNode[];
+  edges: EvidenceGraphEdge[];
+  conflicts: EvidenceGraphConflict[];
+  summary: EvidenceGraphSummary;
+}
+
+export interface InstituteAnomalyFlag {
+  id: number;
+  document_id: number;
+  detector: string;
+  code: string;
+  group_key?: string;
+  severity: 'INFO' | 'LOW' | 'MEDIUM' | 'HIGH';
+  reason: string;
+  evidence_json?: Array<Record<string, any>>;
+  has_overlay?: boolean;
+  recommended_action: string;
+  review_status: string;
+  created_at: string;
+}
 
 export interface RootCauseItem {
   cause_code: string;

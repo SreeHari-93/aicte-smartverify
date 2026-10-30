@@ -262,7 +262,7 @@ def run_stage5_demo():
         print("TEST DOCUMENT: 6. Statutory Verification Conflict (Mismatch Detected)")
         doc_conflict = register_test_doc(
             "conflict_sample.pdf",
-            sample_paths["edited_date"],
+            sample_paths["conflict"],
             "NBA_ACCREDITATION",
             {
                 "certificate_number": "NBA-CONF-999",

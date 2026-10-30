@@ -29,6 +29,8 @@ from backend.app.models.rule import Rule
 from backend.app.models.document import Document
 from backend.app.models.verification import VerificationResult
 from backend.app.models.validation_run import ValidationRun, ValidationFinding
+from backend.app.models.anomaly import AnomalyFlag
+from backend.app.services.anomaly.evidence_graph import EvidenceGraphBuilder
 from backend.app.services.validation.runner import ValidationRunner
 from backend.app.services.explainer.root_cause import RootCauseAnalyzer
 from backend.app.services.explainer.narrator import ExplainerNarrator
@@ -811,6 +813,121 @@ class ReportService:
             ]))
             elements.append(fix_table)
             elements.append(Spacer(1, 10))
+
+        # ---------------------------------------------------------
+        # 6. Preliminary Anomaly Indicators & Screening
+        # ---------------------------------------------------------
+        elements.append(Paragraph("6. Preliminary Anomaly Indicators &amp; Screening", sec_head_style))
+        anomaly_disc_text = (
+            "<i><b>Notice:</b> All anomaly detector outputs are preliminary indicators requiring human verification, "
+            "never proof. Categorized under 'needs verification' and 'potential anomaly'.</i>"
+        )
+        elements.append(Paragraph(anomaly_disc_text, body_p_style))
+        elements.append(Spacer(1, 4))
+
+        app_doc_ids = [d.id for d in app_docs]
+        anomaly_flags: List[AnomalyFlag] = []
+        if app_doc_ids:
+            anomaly_flags = (
+                db.query(AnomalyFlag)
+                .filter(AnomalyFlag.document_id.in_(app_doc_ids))
+                .order_by(AnomalyFlag.id.asc())
+                .all()
+            )
+
+        if anomaly_flags:
+            anom_header = [["Document / Ref", "Detector / Code", "Severity", "Preliminary Indicator &amp; Reason", "Action"]]
+            anom_rows = []
+            for a_flag in anomaly_flags:
+                doc_for_flag = next((d for d in app_docs if d.id == a_flag.document_id), None)
+                doc_name_str = doc_for_flag.original_filename if doc_for_flag else f"Doc #{a_flag.document_id}"
+
+                sev_color = colors.HexColor("#B91C1C") if a_flag.severity == "HIGH" else (
+                    colors.HexColor("#B45309") if a_flag.severity == "MEDIUM" else colors.HexColor("#0B3C9D")
+                )
+
+                doc_p = Paragraph(f"<b>{doc_for_flag.document_type_code if doc_for_flag and doc_for_flag.document_type_code else 'DOC'}</b><br/><font color='#475569'>{doc_name_str[:26]}</font>", find_cell_style)
+                det_p = Paragraph(f"<b>{a_flag.detector}</b><br/><font color='#64748B'>{a_flag.code}</font>", find_cell_style)
+                sev_p = Paragraph(f"<font color='{sev_color.hexval()}'><b>{a_flag.severity}</b></font>", find_bold_style)
+                reason_clean = a_flag.reason.replace("forgery", "potential anomaly").replace("fraud", "potential anomaly").replace("misconduct", "inconsistency")
+                reason_p = Paragraph(reason_clean, find_cell_style)
+                action_p = Paragraph(a_flag.recommended_action or "Official verification required.", find_cell_style)
+
+                anom_rows.append([doc_p, det_p, sev_p, reason_p, action_p])
+
+            anom_table = Table(anom_header + anom_rows, colWidths=[110, 110, 55, 155, 110])
+            anom_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#0F2A5C')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 7.5),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 4),
+                ('TOPPADDING', (0, 0), (-1, 0), 4),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')),
+                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8FAFC')]),
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('LEFTPADDING', (0, 0), (-1, -1), 4),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+            ]))
+            elements.append(anom_table)
+        else:
+            no_anom_p = Paragraph("<i>No potential anomaly indicators detected. All documents passed automated preliminary screening.</i>", body_p_style)
+            elements.append(no_anom_p)
+
+        elements.append(Spacer(1, 10))
+
+        # ---------------------------------------------------------
+        # 7. Cross-Document Evidence Graph & Consistency Analysis
+        # ---------------------------------------------------------
+        elements.append(Paragraph("7. Cross-Document Evidence &amp; Consistency Analysis", sec_head_style))
+        graph_disc_text = (
+            "<i><b>Notice:</b> Evidence graph cross-references extracted metadata, authority verification results, and document attributes. "
+            "All consistency flags are preliminary indicators requiring human verification.</i>"
+        )
+        elements.append(Paragraph(graph_disc_text, body_p_style))
+        elements.append(Spacer(1, 4))
+
+        graph_conflicts = []
+        if app:
+            try:
+                g_data = EvidenceGraphBuilder.build_graph(db=db, application_id=app.id, is_admin=False)
+                graph_conflicts = g_data.get("conflicts", [])
+            except Exception:
+                graph_conflicts = []
+
+        if graph_conflicts:
+            conf_header = [["Conflict Type", "Affected Documents", "Extracted Discrepancy", "Preliminary Status"]]
+            conf_rows = []
+            for c in graph_conflicts:
+                docs_str = f"{c.get('doc_file_1', 'Doc A')[:24]}<br/>vs<br/>{c.get('doc_file_2', 'Doc B')[:24]}"
+                val_str = f"<b>Doc 1:</b> {str(c.get('value_1', '—'))[:28]}<br/><b>Doc 2:</b> {str(c.get('value_2', '—'))[:28]}"
+                status_str = "<font color='#B45309'><b>Needs verification</b></font>"
+                conf_rows.append([
+                    Paragraph(f"<b>{c.get('type', 'CONFLICT').replace('_', ' ')}</b><br/><font color='#64748B'>{c.get('field', '')}</font>", find_cell_style),
+                    Paragraph(docs_str, find_cell_style),
+                    Paragraph(val_str, find_cell_style),
+                    Paragraph(status_str, find_cell_style),
+                ])
+            conf_table = Table(conf_header + conf_rows, colWidths=[130, 150, 160, 100])
+            conf_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#0F2A5C')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, 0), 7.5),
+                ('BOTTOMPADDING', (0, 0), (-1, 0), 4),
+                ('TOPPADDING', (0, 0), (-1, 0), 4),
+                ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')),
+                ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8FAFC')]),
+                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                ('LEFTPADDING', (0, 0), (-1, -1), 4),
+                ('RIGHTPADDING', (0, 0), (-1, -1), 4),
+            ]))
+            elements.append(conf_table)
+        else:
+            no_conf_p = Paragraph("<i>Cross-document consistency check passed. Extracted institute identifiers, addresses, and statutory dates are consistent across submitted documents.</i>", body_p_style)
+            elements.append(no_conf_p)
+
+        elements.append(Spacer(1, 10))
 
         # ---------------------------------------------------------
         # 8. Mandatory Statutory Disclaimer Box

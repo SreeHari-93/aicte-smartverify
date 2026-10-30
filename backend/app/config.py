@@ -49,7 +49,7 @@ class Settings(BaseSettings):
 
     # Anomaly Detection Engine Settings
     ANOMALY_STORAGE_DIR: str = os.path.abspath(os.path.join(os.path.dirname(__file__), "../storage/anomalies"))
-    ANOMALY_DUPLICATE_PHASH_THRESHOLD: int = 5
+    ANOMALY_DUPLICATE_PHASH_THRESHOLD: int = 3
     ANOMALY_DUPLICATE_TEXT_SIMILARITY_THRESHOLD: float = 0.85
     ANOMALY_SUSPICIOUS_PRODUCERS: List[str] = [
         "photoshop", "canva", "gimp", "sejda", "pdfescape", 
@@ -60,7 +60,7 @@ class Settings(BaseSettings):
     ANOMALY_ELA_SCALE: float = 15.0
     ANOMALY_ELA_QUALITY: int = 90
     ANOMALY_ELA_DIFF_THRESHOLD: float = 28.0
-    ANOMALY_COPY_MOVE_MIN_MATCHES: int = 25
+    ANOMALY_COPY_MOVE_MIN_MATCHES: int = 40
     ANOMALY_COPY_MOVE_MIN_DISTANCE: float = 40.0
     ANOMALY_TEXT_BASELINE_VAR_THRESHOLD: float = 12.0
 

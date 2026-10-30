@@ -1,7 +1,30 @@
 import React, { useState, useEffect } from 'react';
-import { Bot, Play, Sparkles, HelpCircle, CheckCircle2, AlertTriangle, Languages, Info, Wrench, ShieldAlert } from 'lucide-react';
-import { instituteApi, ApplicationItem, ValidationCheck, ValidationRunData, WhyFailedData } from '../../api/institute';
+import {
+  Bot,
+  Play,
+  Sparkles,
+  HelpCircle,
+  CheckCircle2,
+  AlertTriangle,
+  Languages,
+  Info,
+  Wrench,
+  ShieldAlert,
+  Network,
+  AlertCircle,
+} from 'lucide-react';
+import {
+  instituteApi,
+  ApplicationItem,
+  ValidationCheck,
+  ValidationRunData,
+  WhyFailedData,
+  EvidenceGraphData,
+  EvidenceGraphNode,
+  EvidenceGraphEdge,
+} from '../../api/institute';
 import { StatusPill } from '../../components/StatusPill';
+import { Drawer } from '../../components/Drawer';
 
 export const ValidationPage: React.FC = () => {
   const [applications, setApplications] = useState<ApplicationItem[]>([]);
@@ -12,6 +35,13 @@ export const ValidationPage: React.FC = () => {
   const [whyFailedData, setWhyFailedData] = useState<WhyFailedData | null>(null);
   const [whyFailedLang, setWhyFailedLang] = useState<'en' | 'hi'>('en');
   const [isLoadingWhyFailed, setIsLoadingWhyFailed] = useState<boolean>(false);
+
+  // Evidence Graph State
+  const [evidenceGraph, setEvidenceGraph] = useState<EvidenceGraphData | null>(null);
+  const [isLoadingGraph, setIsLoadingGraph] = useState<boolean>(false);
+  const [selectedGraphNode, setSelectedGraphNode] = useState<EvidenceGraphNode | null>(null);
+  const [selectedGraphEdge, setSelectedGraphEdge] = useState<EvidenceGraphEdge | null>(null);
+  const [isEvidenceDrawerOpen, setIsEvidenceDrawerOpen] = useState<boolean>(false);
 
   const formatVerificationStatus = (raw?: string): string => {
     if (!raw) return 'Pending';
@@ -67,6 +97,19 @@ export const ValidationPage: React.FC = () => {
     }
   };
 
+  const loadEvidenceGraph = async (appId: string) => {
+    setIsLoadingGraph(true);
+    try {
+      const gData = await instituteApi.getEvidenceGraph(appId);
+      setEvidenceGraph(gData);
+    } catch (err) {
+      console.warn('Evidence graph fetch note:', err);
+      setEvidenceGraph(null);
+    } finally {
+      setIsLoadingGraph(false);
+    }
+  };
+
   const loadValidationForApp = async (appId: string, lang: 'en' | 'hi' = whyFailedLang) => {
     try {
       const data = await instituteApi.getLatestValidation(appId);
@@ -86,8 +129,11 @@ export const ValidationPage: React.FC = () => {
       }
     }
 
-    // Load Why Failed explainer
-    await loadWhyFailed(appId, lang);
+    // Load Why Failed explainer and Evidence Graph concurrently
+    await Promise.all([
+      loadWhyFailed(appId, lang),
+      loadEvidenceGraph(appId),
+    ]);
   };
 
   useEffect(() => {
@@ -130,12 +176,58 @@ export const ValidationPage: React.FC = () => {
       } else {
         setChecks([]);
       }
-      await loadWhyFailed(selectedAppId, whyFailedLang);
+      await Promise.all([
+        loadWhyFailed(selectedAppId, whyFailedLang),
+        loadEvidenceGraph(selectedAppId),
+      ]);
     } catch (err) {
       console.error('Validation failed:', err);
     } finally {
       setIsValidating(false);
     }
+  };
+
+  const computeGraphLayout = (graph: EvidenceGraphData | null) => {
+    if (!graph || !graph.nodes) return { positions: new Map<string, { x: number; y: number; node: EvidenceGraphNode }>(), width: 920, height: 490 };
+
+    const positions = new Map<string, { x: number; y: number; node: EvidenceGraphNode }>();
+    const W = 920;
+
+    const instNodes = graph.nodes.filter((n) => n.type === 'institute');
+    const appNodes = graph.nodes.filter((n) => n.type === 'application');
+    const docNodes = graph.nodes.filter((n) => n.type === 'document');
+    const fieldNodes = graph.nodes.filter((n) => n.type === 'field');
+    const verNodes = graph.nodes.filter((n) => n.type === 'verification');
+    const flagNodes = graph.nodes.filter((n) => n.type === 'anomaly_flag');
+
+    // Layer 0: Institute (x: 280, y: 55) & Application (x: 640, y: 55)
+    instNodes.forEach((node, i) => {
+      positions.set(node.id, { x: 280 + i * 40, y: 55, node });
+    });
+    appNodes.forEach((node, i) => {
+      positions.set(node.id, { x: 640 + i * 40, y: 55, node });
+    });
+
+    // Layer 1: Documents (y: 160)
+    const dCount = docNodes.length || 1;
+    docNodes.forEach((node, i) => {
+      positions.set(node.id, { x: (W / (dCount + 1)) * (i + 1), y: 160, node });
+    });
+
+    // Layer 2: Extracted fields & Verifications (y: 285)
+    const midNodes = [...fieldNodes.slice(0, 8), ...verNodes.slice(0, 6)];
+    const mCount = midNodes.length || 1;
+    midNodes.forEach((node, i) => {
+      positions.set(node.id, { x: (W / (mCount + 1)) * (i + 1), y: 285, node });
+    });
+
+    // Layer 3: Anomaly flags (y: 420)
+    const fCount = flagNodes.length || 1;
+    flagNodes.forEach((node, i) => {
+      positions.set(node.id, { x: (W / (fCount + 1)) * (i + 1), y: 420, node });
+    });
+
+    return { positions, width: W, height: 490 };
   };
 
   return (
@@ -408,6 +500,241 @@ export const ValidationPage: React.FC = () => {
         </div>
       )}
 
+      {/* Evidence Graph Card */}
+      <div className="bg-white rounded-[12px] p-6 shadow-[0_6px_18px_rgba(0,0,0,0.18)] border border-slate-100 space-y-4">
+        {/* Card Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-100 gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-[#E3F0FF] text-[#0B3C9D] flex items-center justify-center shrink-0">
+              <Network size={20} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-base font-bold text-[#0F2A5C] tracking-tight">
+                  Cross-Document Evidence Graph
+                </h3>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-purple-700 bg-purple-100 px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                  <Sparkles size={11} />
+                  <span>Interactive Network</span>
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Multi-entity relationship network reconciling applications, documents, extracted fields, issuing registers &amp; anomaly signals. Click any node or link to inspect evidence.
+              </p>
+            </div>
+          </div>
+
+          {/* Quick Metrics */}
+          {evidenceGraph && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-mono font-bold text-slate-700 bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-md">
+                {evidenceGraph.summary.node_count} Nodes • {evidenceGraph.summary.edge_count} Edges
+              </span>
+              {evidenceGraph.summary.conflict_count > 0 ? (
+                <span className="text-xs font-bold uppercase tracking-wider text-amber-800 bg-amber-100 border border-amber-300 px-2.5 py-1 rounded-md flex items-center gap-1">
+                  <AlertCircle size={13} />
+                  <span>{evidenceGraph.summary.conflict_count} Conflicts (Needs verification)</span>
+                </span>
+              ) : (
+                <span className="text-xs font-bold uppercase tracking-wider text-emerald-800 bg-emerald-100 border border-emerald-300 px-2.5 py-1 rounded-md flex items-center gap-1">
+                  <CheckCircle2 size={13} />
+                  <span>Cross-Document Verified</span>
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Legend */}
+        <div className="flex items-center gap-3 flex-wrap text-[11px] bg-slate-50 p-2.5 rounded-lg border border-slate-200/80">
+          <span className="font-bold text-slate-600 uppercase text-[10px] tracking-wider">Legend:</span>
+          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-[#3B82F6]" /> Institute</span>
+          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-[#8B5CF6]" /> Application</span>
+          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-[#0B3C9D]" /> Document</span>
+          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-[#10B981]" /> Extracted Field</span>
+          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-[#059669]" /> Statutory Verification</span>
+          <span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full bg-[#EF4444]" /> Anomaly Flag</span>
+          <span className="flex items-center gap-1.5"><span className="w-4 h-0.5 bg-[#DC2626] border-b border-dashed border-[#DC2626]" /> Conflict Edge</span>
+        </div>
+
+        {/* SVG Diagram Canvas */}
+        {isLoadingGraph ? (
+          <div className="py-20 text-center text-slate-400 text-xs">
+            Loading application evidence network...
+          </div>
+        ) : !evidenceGraph || evidenceGraph.nodes.length === 0 ? (
+          <div className="py-16 text-center text-slate-400 text-xs border border-dashed rounded-xl">
+            No evidence graph data available for this application.
+          </div>
+        ) : (
+          (() => {
+            const { positions } = computeGraphLayout(evidenceGraph);
+            return (
+              <div className="overflow-x-auto border border-slate-200 rounded-xl bg-slate-50/50 p-2">
+                <svg
+                  viewBox="0 0 920 490"
+                  className="w-full min-w-[760px] h-auto select-none"
+                >
+                  <defs>
+                    <marker id="arrow" viewBox="0 0 10 10" refX="22" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                      <path d="M 0 1 L 10 5 L 0 9 z" fill="#94A3B8" />
+                    </marker>
+                  </defs>
+
+                  {/* Edges */}
+                  {evidenceGraph.edges.map((edge) => {
+                    const s = positions.get(edge.source);
+                    const t = positions.get(edge.target);
+                    if (!s || !t) return null;
+
+                    const isConflict = edge.type === 'field-conflicts-with-field';
+                    const isDuplicate = edge.type === 'duplicate-of';
+                    const isFlag = edge.type === 'flag-about-document';
+                    const isVer = edge.type === 'document-verified-by-source';
+
+                    let stroke = '#CBD5E1';
+                    let strokeWidth = 1.5;
+                    let strokeDasharray: string | undefined = undefined;
+
+                    if (isConflict) {
+                      stroke = '#DC2626';
+                      strokeWidth = 2.5;
+                      strokeDasharray = '5 4';
+                    } else if (isDuplicate) {
+                      stroke = '#D97706';
+                      strokeWidth = 2;
+                      strokeDasharray = '4 4';
+                    } else if (isFlag) {
+                      stroke = '#EF4444';
+                      strokeWidth = 1.8;
+                      strokeDasharray = '3 3';
+                    } else if (isVer) {
+                      stroke = '#10B981';
+                      strokeWidth = 1.8;
+                    }
+
+                    const midX = (s.x + t.x) / 2;
+                    const midY = (s.y + t.y) / 2;
+                    const curveOffset = isConflict ? 35 : (isDuplicate ? -30 : 0);
+
+                    return (
+                      <g
+                        key={edge.id}
+                        className="cursor-pointer group"
+                        onClick={() => {
+                          setSelectedGraphNode(null);
+                          setSelectedGraphEdge(edge);
+                          setIsEvidenceDrawerOpen(true);
+                        }}
+                      >
+                        <path
+                          d={`M ${s.x} ${s.y} Q ${midX} ${midY + curveOffset} ${t.x} ${t.y}`}
+                          fill="none"
+                          stroke={stroke}
+                          strokeWidth={strokeWidth}
+                          strokeDasharray={strokeDasharray}
+                          className="transition-all group-hover:stroke-[#F58220] group-hover:stroke-[3]"
+                        />
+                        {isConflict && (
+                          <g transform={`translate(${midX}, ${midY + curveOffset})`}>
+                            <circle r={10} fill="#FEE2E2" stroke="#DC2626" strokeWidth={1.5} />
+                            <text textAnchor="middle" dy={3.5} fontSize={10} fill="#DC2626" fontWeight="bold">!</text>
+                          </g>
+                        )}
+                      </g>
+                    );
+                  })}
+
+                  {/* Nodes */}
+                  {Array.from(positions.values()).map(({ x, y, node }) => {
+                    let fill = '#FFFFFF';
+                    let stroke = '#94A3B8';
+                    let textCol = '#0F2A5C';
+                    const typeBadge = node.type.toUpperCase().replace(/_/g, ' ');
+
+                    if (node.type === 'institute') {
+                      fill = '#EFF6FF';
+                      stroke = '#3B82F6';
+                      textCol = '#1E3A8A';
+                    } else if (node.type === 'application') {
+                      fill = '#F5F3FF';
+                      stroke = '#8B5CF6';
+                      textCol = '#5B21B6';
+                    } else if (node.type === 'document') {
+                      fill = '#F8FAFC';
+                      stroke = '#0B3C9D';
+                      textCol = '#0B3C9D';
+                    } else if (node.type === 'field') {
+                      fill = '#F0FDF4';
+                      stroke = '#10B981';
+                      textCol = '#065F46';
+                    } else if (node.type === 'verification') {
+                      fill = '#ECFDF5';
+                      stroke = '#059669';
+                      textCol = '#064E3B';
+                    } else if (node.type === 'anomaly_flag') {
+                      fill = '#FEF2F2';
+                      stroke = '#EF4444';
+                      textCol = '#991B1B';
+                    }
+
+                    const boxW = 144;
+                    const boxH = 42;
+
+                    return (
+                      <g
+                        key={node.id}
+                        transform={`translate(${x}, ${y})`}
+                        className="cursor-pointer group"
+                        onClick={() => {
+                          setSelectedGraphEdge(null);
+                          setSelectedGraphNode(node);
+                          setIsEvidenceDrawerOpen(true);
+                        }}
+                      >
+                        <rect
+                          x={-boxW / 2}
+                          y={-boxH / 2}
+                          width={boxW}
+                          height={boxH}
+                          rx={8}
+                          fill={fill}
+                          stroke={stroke}
+                          strokeWidth={1.5}
+                          className="transition-all group-hover:shadow-md group-hover:stroke-[#F58220] group-hover:stroke-2"
+                        />
+                        <text
+                          x={0}
+                          y={-7}
+                          textAnchor="middle"
+                          fontSize={8}
+                          fontWeight="bold"
+                          fill={textCol}
+                          letterSpacing="0.05em"
+                        >
+                          {typeBadge}
+                        </text>
+                        <text
+                          x={0}
+                          y={9}
+                          textAnchor="middle"
+                          fontSize={9}
+                          fontWeight="600"
+                          fill="#1E293B"
+                          className="select-none"
+                        >
+                          {node.label.length > 20 ? node.label.substring(0, 19) + '…' : node.label}
+                        </text>
+                      </g>
+                    );
+                  })}
+                </svg>
+              </div>
+            );
+          })()
+        )}
+      </div>
+
       {/* 3. Validation Report Card with Real Status Badge */}
       <div className="bg-white rounded-[12px] p-6 shadow-[0_6px_18px_rgba(0,0,0,0.18)] border border-slate-100">
         <div className="flex items-center justify-between pb-4 border-b border-slate-100">
@@ -501,6 +828,169 @@ export const ValidationPage: React.FC = () => {
           </p>
         </div>
       </div>
+
+      {/* Evidence Graph Detail Drawer */}
+      <Drawer
+        isOpen={isEvidenceDrawerOpen}
+        onClose={() => setIsEvidenceDrawerOpen(false)}
+        title={
+          selectedGraphNode
+            ? `Evidence Node: ${selectedGraphNode.type.toUpperCase()}`
+            : selectedGraphEdge
+            ? `Evidence Link: ${selectedGraphEdge.type.replace(/-/g, ' ').toUpperCase()}`
+            : 'Evidence Inspector'
+        }
+        subtitle="Cross-Document Verification & Anomaly Inspection"
+        width="max-w-xl"
+      >
+        <div className="space-y-4 text-xs text-slate-700">
+          {/* Selected Node Details */}
+          {selectedGraphNode && (
+            <div className="space-y-4">
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-1">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                  Label / Entity Identifier
+                </span>
+                <h4 className="text-sm font-bold text-[#0F2A5C]">{selectedGraphNode.label}</h4>
+                <span className="text-[10px] font-mono text-slate-500">ID: {selectedGraphNode.id}</span>
+              </div>
+
+              {/* Properties table */}
+              <div className="space-y-2">
+                <h5 className="font-bold text-[#0F2A5C] uppercase text-[11px] tracking-wider">
+                  Node Attributes
+                </h5>
+                <div className="border border-slate-200 rounded-lg overflow-hidden divide-y divide-slate-100">
+                  {Object.entries(selectedGraphNode.properties || {}).map(([k, v]) => {
+                    if (k === 'evidence' || k === 'overlay_image_path') return null;
+                    return (
+                      <div key={k} className="p-2.5 flex items-start justify-between gap-3 text-xs bg-white">
+                        <span className="font-mono text-slate-500 font-semibold">{k}</span>
+                        <span className="text-slate-800 font-medium text-right break-all">
+                          {typeof v === 'object' ? JSON.stringify(v) : String(v)}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Anomaly Specific Section */}
+              {selectedGraphNode.type === 'anomaly_flag' && (
+                <div className="p-4 bg-amber-50/70 border border-amber-200 rounded-lg space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-amber-900 text-xs flex items-center gap-1.5">
+                      <ShieldAlert size={15} className="text-amber-600" />
+                      Preliminary Anomaly Signal
+                    </span>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-amber-100 text-amber-800 border border-amber-300">
+                      Needs verification
+                    </span>
+                  </div>
+                  <p className="text-xs text-amber-950 leading-relaxed">
+                    {selectedGraphNode.properties.reason}
+                  </p>
+                  <div className="text-[11px] text-amber-900">
+                    <strong>Recommended Action:</strong> {selectedGraphNode.properties.recommended_action}
+                  </div>
+
+                  {/* Tampering Evidence Map Preview if overlay present */}
+                  {selectedGraphNode.properties.has_overlay && (
+                    <div className="mt-3 pt-3 border-t border-amber-200/80 space-y-2">
+                      <span className="font-bold text-slate-800 text-[11px] block">
+                        Visual Tampering Map (Overlay)
+                      </span>
+                      <div className="bg-slate-900 rounded-lg p-2 flex items-center justify-center">
+                        <img
+                          src={`/api/institute/documents/${selectedGraphNode.properties.document_id}/anomalies/${selectedGraphNode.properties.id}/overlay`}
+                          alt="Tampering Overlay"
+                          className="max-h-60 object-contain rounded"
+                          onError={(e) => {
+                            (e.target as HTMLElement).style.display = 'none';
+                          }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Selected Edge Details */}
+          {selectedGraphEdge && (
+            <div className="space-y-4">
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-1">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                  Relationship Link
+                </span>
+                <h4 className="text-sm font-bold text-[#0F2A5C]">{selectedGraphEdge.label}</h4>
+                <div className="flex items-center gap-2 text-[10px] font-mono text-slate-500 pt-1">
+                  <span>From: {selectedGraphEdge.source}</span>
+                  <span>→</span>
+                  <span>To: {selectedGraphEdge.target}</span>
+                </div>
+              </div>
+
+              {/* Conflict Edge Comparison View */}
+              {selectedGraphEdge.type === 'field-conflicts-with-field' && (
+                <div className="p-4 bg-red-50/80 border border-red-200 rounded-lg space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-red-900 text-xs flex items-center gap-1.5">
+                      <AlertCircle size={15} className="text-red-600" />
+                      Cross-Document Inconsistency
+                    </span>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-red-100 text-red-800 border border-red-300">
+                      Needs verification
+                    </span>
+                  </div>
+
+                  <p className="text-xs text-red-950 leading-relaxed">
+                    {selectedGraphEdge.properties?.reason || 'Conflicting values detected across institutional documentation.'}
+                  </p>
+
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="p-2.5 bg-white rounded border border-red-200 space-y-1">
+                      <span className="text-[10px] text-slate-500 font-bold block truncate">
+                        {selectedGraphEdge.properties?.doc_file_1 || 'Document 1'}
+                      </span>
+                      <span className="font-mono text-red-700 font-bold break-all">
+                        {String(selectedGraphEdge.properties?.value_1 ?? '—')}
+                      </span>
+                    </div>
+                    <div className="p-2.5 bg-white rounded border border-red-200 space-y-1">
+                      <span className="text-[10px] text-slate-500 font-bold block truncate">
+                        {selectedGraphEdge.properties?.doc_file_2 || 'Document 2'}
+                      </span>
+                      <span className="font-mono text-red-700 font-bold break-all">
+                        {String(selectedGraphEdge.properties?.value_2 ?? '—')}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Duplicate Edge View */}
+              {selectedGraphEdge.type === 'duplicate-of' && (
+                <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-amber-900 text-xs flex items-center gap-1.5">
+                      <AlertCircle size={15} className="text-amber-600" />
+                      Potential Duplicate Document
+                    </span>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-amber-100 text-amber-800 border border-amber-300">
+                      Needs verification
+                    </span>
+                  </div>
+                  <p className="text-xs text-amber-950">
+                    {selectedGraphEdge.properties?.reason || 'Identical or visually matching documents detected; preliminary indicator.'}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </Drawer>
     </div>
   );
 };

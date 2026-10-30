@@ -15,6 +15,7 @@ import {
   Save,
   X,
   ShieldCheck,
+  ShieldAlert,
   Sparkles,
   XCircle,
   RefreshCw,
@@ -25,6 +26,7 @@ import {
   InstituteChecklistItem,
   DocumentExtractionData,
   ApplicationReadinessData,
+  InstituteAnomalyFlag,
 } from '../../api/institute';
 import { StatusPill } from '../../components/StatusPill';
 import { Drawer } from '../../components/Drawer';
@@ -57,6 +59,7 @@ export const UploadPage: React.FC = () => {
   const [fieldSaveSuccess, setFieldSaveSuccess] = useState<string | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
   const [verifyNotice, setVerifyNotice] = useState<string | null>(null);
+  const [docAnomalies, setDocAnomalies] = useState<InstituteAnomalyFlag[]>([]);
 
   const formatVerificationStatus = (raw?: string): string => {
     if (!raw) return 'Pending';
@@ -191,9 +194,14 @@ export const UploadPage: React.FC = () => {
     setIsLoadingExtraction(true);
     setFieldSaveSuccess(null);
     setEditingFieldKey(null);
+    setDocAnomalies([]);
     try {
-      const data = await instituteApi.getDocumentExtraction(doc.id);
+      const [data, anomalies] = await Promise.all([
+        instituteApi.getDocumentExtraction(doc.id),
+        instituteApi.getDocumentAnomalies(doc.id).catch(() => []),
+      ]);
       setExtractionData(data);
+      setDocAnomalies(anomalies || []);
     } catch (err) {
       console.error('Failed to load extraction:', err);
     } finally {
@@ -247,9 +255,13 @@ export const UploadPage: React.FC = () => {
     setVerifyNotice(null);
     try {
       await instituteApi.verifyDocument(drawerDoc.id);
-      const updatedExt = await instituteApi.getDocumentExtraction(drawerDoc.id);
+      const [updatedExt, updatedAnom, updatedDocs] = await Promise.all([
+        instituteApi.getDocumentExtraction(drawerDoc.id),
+        instituteApi.getDocumentAnomalies(drawerDoc.id).catch(() => []),
+        instituteApi.getDocuments(),
+      ]);
       setExtractionData(updatedExt);
-      const updatedDocs = await instituteApi.getDocuments();
+      setDocAnomalies(updatedAnom || []);
       setDocuments(updatedDocs);
       const freshDoc = updatedDocs.find((d) => d.id === drawerDoc.id);
       if (freshDoc) setDrawerDoc(freshDoc);
@@ -795,6 +807,128 @@ export const UploadPage: React.FC = () => {
                   </div>
                 )}
               </div>
+            </div>
+
+            {/* Preliminary Anomaly Indicators Section */}
+            <div className="p-4 bg-white border border-slate-200 rounded-[10px] shadow-xs space-y-3">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100 flex-wrap gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <ShieldAlert size={16} className="text-amber-600" />
+                  <span className="font-bold text-[#0F2A5C] text-xs">Preliminary Anomaly Indicators</span>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-300">
+                    Needs verification
+                  </span>
+                </div>
+                <span className="text-[11px] font-mono text-slate-500">
+                  {docAnomalies.length} {docAnomalies.length === 1 ? 'indicator' : 'indicators'} detected
+                </span>
+              </div>
+
+              {docAnomalies.length === 0 ? (
+                <div className="text-[11px] text-slate-500 bg-slate-50 p-3 rounded-lg border border-slate-100 flex items-center gap-2">
+                  <CheckCircle2 size={14} className="text-emerald-600 shrink-0" />
+                  <span>No potential anomaly indicators detected. Document passed preliminary automated screening.</span>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {docAnomalies.map((flag) => {
+                    const isTamper = flag.detector === 'ImageTamperDetector' || flag.has_overlay;
+                    return (
+                      <div
+                        key={flag.id}
+                        className="p-3.5 rounded-lg border border-slate-200 bg-slate-50/70 space-y-2 hover:bg-slate-50 transition-colors"
+                      >
+                        <div className="flex items-start justify-between gap-2 flex-wrap">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-mono text-[11px] font-bold text-[#0B3C9D]">
+                              {flag.code}
+                            </span>
+                            <span className="text-[10px] text-slate-400 font-medium">
+                              ({flag.detector})
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <StatusPill status={flag.severity} />
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-purple-100 text-purple-800 border border-purple-200">
+                              {flag.review_status.replace(/_/g, ' ')}
+                            </span>
+                          </div>
+                        </div>
+
+                        <p className="text-xs text-slate-700 leading-relaxed">
+                          {flag.reason}
+                        </p>
+
+                        <div className="text-[11px] text-slate-500 flex items-start gap-1">
+                          <strong className="text-slate-700 shrink-0">Action:</strong>
+                          <span>{flag.recommended_action}</span>
+                        </div>
+
+                        {/* TAMPERING EVIDENCE MAP */}
+                        {isTamper && drawerDoc && (
+                          <div className="mt-3 p-3 bg-white rounded-lg border border-slate-200 space-y-2.5">
+                            <div className="flex items-center justify-between">
+                              <span className="font-bold text-[#0F2A5C] text-[11px] flex items-center gap-1.5">
+                                <Eye size={13} className="text-[#0B3C9D]" />
+                                Tampering Evidence Map (Visual Irregularities)
+                              </span>
+                              <span className="text-[10px] font-mono text-slate-500">
+                                Preliminary Scrutiny Heatmap
+                              </span>
+                            </div>
+
+                            {/* Overlay Image */}
+                            <div className="relative overflow-hidden rounded-lg border border-slate-300 bg-slate-900/95 flex items-center justify-center p-2">
+                              <img
+                                src={`/api/institute/documents/${drawerDoc.id}/anomalies/${flag.id}/overlay`}
+                                alt="Visual Tamper Overlay"
+                                className="max-h-64 object-contain rounded"
+                                onError={(e) => {
+                                  (e.target as HTMLElement).style.display = 'none';
+                                }}
+                              />
+                            </div>
+
+                            {/* Highlighted Bounding Box Regions List */}
+                            {flag.evidence_json && flag.evidence_json.length > 0 && (
+                              <div className="space-y-1.5 pt-1">
+                                <span className="text-[10px] font-bold text-slate-700 uppercase tracking-wider block">
+                                  Highlighted Irregularity Regions ({flag.evidence_json.length})
+                                </span>
+                                {flag.evidence_json.map((reg, regIdx) => (
+                                  <div
+                                    key={regIdx}
+                                    className="p-2.5 bg-red-50/70 border border-red-200 rounded-md text-xs space-y-1"
+                                  >
+                                    <div className="flex items-center justify-between text-[11px]">
+                                      <span className="font-bold text-red-900 font-mono">
+                                        Region #{regIdx + 1} {reg.page ? `• Page ${reg.page}` : ''}
+                                      </span>
+                                      {reg.type && (
+                                        <span className="text-[10px] font-semibold text-red-800 bg-white border border-red-200 px-1.5 py-0.5 rounded">
+                                          {reg.type}
+                                        </span>
+                                      )}
+                                    </div>
+                                    {reg.bbox && (
+                                      <div className="text-[10px] font-mono text-slate-500">
+                                        Region Bounding Box: [{reg.bbox.join(', ')}]
+                                      </div>
+                                    )}
+                                    <p className="text-[11px] text-red-800 leading-normal">
+                                      {reg.reason || 'Visual compression, repetition cluster, or layout irregularity detected; preliminary indicator requiring verification.'}
+                                    </p>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             {/* Classification Card */}

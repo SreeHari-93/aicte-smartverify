@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import List, Optional, Any, Dict
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class AnomalyFlagDTO(BaseModel):
@@ -37,6 +37,7 @@ class AnomalyFlagOut(BaseModel):
     review_note: Optional[str] = None
     reviewed_at: Optional[datetime] = None
     overlay_image_path: Optional[str] = None
+    has_overlay: bool = False
     created_at: datetime
 
     class Config:
@@ -56,9 +57,24 @@ class InstituteAnomalyFlagOut(BaseModel):
     group_key: Optional[str] = None
     severity: str
     reason: str
+    evidence_json: List[Dict[str, Any]] = Field(default_factory=list)
+    has_overlay: bool = False
     recommended_action: str
     review_status: str
     created_at: datetime
+
+    @field_validator("evidence_json", mode="before")
+    def sanitize_evidence(cls, v):
+        if not v or not isinstance(v, list):
+            return []
+        sanitized = []
+        for item in v:
+            if isinstance(item, dict):
+                clean = {k: val for k, val in item.items() if k not in ["confidence", "internal_confidence"]}
+                sanitized.append(clean)
+            else:
+                sanitized.append(item)
+        return sanitized
 
     class Config:
         from_attributes = True
@@ -76,4 +92,51 @@ class AnomalyRunOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class EvidenceGraphNode(BaseModel):
+    id: str
+    type: str
+    label: str
+    properties: Dict[str, Any] = Field(default_factory=dict)
+
+
+class EvidenceGraphEdge(BaseModel):
+    id: str
+    source: str
+    target: str
+    type: str
+    label: str
+    properties: Dict[str, Any] = Field(default_factory=dict)
+
+
+class EvidenceGraphConflict(BaseModel):
+    type: str
+    field: str
+    doc_id_1: int
+    doc_id_2: int
+    doc_file_1: str
+    doc_file_2: str
+    value_1: Any
+    value_2: Any
+    reason: str
+
+
+class EvidenceGraphSummary(BaseModel):
+    node_count: int
+    edge_count: int
+    conflict_count: int
+    anomaly_flag_count: int
+    documents_count: int
+
+
+class EvidenceGraphResponse(BaseModel):
+    application_id: str
+    application_pk: int
+    institute_id: int
+    institute_name: str
+    nodes: List[EvidenceGraphNode]
+    edges: List[EvidenceGraphEdge]
+    conflicts: List[EvidenceGraphConflict]
+    summary: EvidenceGraphSummary
 

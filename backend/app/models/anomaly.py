@@ -1,3 +1,4 @@
+import os
 from datetime import datetime, timezone
 from sqlalchemy import Column, Integer, String, Text, DateTime, JSON, ForeignKey, Float
 from sqlalchemy.orm import relationship
@@ -62,4 +63,8 @@ class AnomalyFlag(Base):
     run = relationship("AnomalyRun", back_populates="flags")
     document = relationship("Document", back_populates="anomaly_flags")
     reviewer = relationship("User", foreign_keys=[reviewed_by])
+
+    @property
+    def has_overlay(self) -> bool:
+        return bool(self.overlay_image_path and os.path.exists(self.overlay_image_path))
 

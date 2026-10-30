@@ -1,4 +1,4 @@
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Union
 from datetime import datetime, timezone
 import os
 from fastapi import APIRouter, Depends, HTTPException, Query, status, Response
@@ -33,6 +33,8 @@ from backend.app.services.anomaly import (
     AnomalyService,
     AnomalyFlagOut,
     AnomalyReviewRequest,
+    EvidenceGraphBuilder,
+    EvidenceGraphResponse,
 )
 from backend.app.schemas.institute import (
     ApplicationReadinessResponse,
@@ -1695,6 +1697,32 @@ def get_anomaly_overlay_image(
         )
 
     return FileResponse(flag.overlay_image_path, media_type="image/png")
+
+
+@router.get("/applications/{application_id}/evidence-graph", response_model=EvidenceGraphResponse)
+def get_admin_application_evidence_graph(
+    application_id: Union[int, str],
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """
+    Builds comprehensive multi-entity cross-document evidence graph for an application.
+    Includes full internal confidence scores and raw inspection properties for scrutiny officials.
+    """
+    app = None
+    if isinstance(application_id, int) or (isinstance(application_id, str) and application_id.isdigit()):
+        app = db.query(Application).filter(Application.id == int(application_id)).first()
+    if not app:
+        app = db.query(Application).filter(Application.application_id == str(application_id)).first()
+
+    if not app:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Application '{application_id}' not found.",
+        )
+
+    graph_data = EvidenceGraphBuilder.build_graph(db=db, application_id=app.id, is_admin=True)
+    return graph_data
 
 
 
