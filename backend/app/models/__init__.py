@@ -38,6 +38,24 @@ from backend.app.models.anomaly import (
     AnomalyReviewStatus,
 )
 from backend.app.models.evaluation import EvaluationRun, AIFeedback
+from backend.app.models.infrastructure import InfrastructureDetail
+from backend.app.models.workflow import (
+    WorkflowTemplate,
+    WorkflowTemplateStage,
+    ApplicationWorkflow,
+    WorkflowHistory,
+    WorkflowStatus,
+    WorkflowAction,
+)
+from backend.app.models.alert_event import AlertEvent
+from backend.app.models.evc import EvcRecord, EvcStatus
+from backend.app.models.undertaking import Undertaking, UndertakingStatus, UndertakingCategory
+from backend.app.models.document_validity import DocumentValidityRecord, ValidityStatus
+from backend.app.models.notification_rule import NotificationRule
+from backend.app.models.escalation import EscalationMatrix, EscalationRecord
+from backend.app.models.scheduler_log import SchedulerRunLog
+from backend.app.models.system_setting import SystemSetting
+from backend.app.models.communication_template import CommunicationTemplate
 
 __all__ = [
     "User",
@@ -81,4 +99,24 @@ __all__ = [
     "AnomalyReviewStatus",
     "EvaluationRun",
     "AIFeedback",
+    "InfrastructureDetail",
+    "WorkflowTemplate",
+    "WorkflowTemplateStage",
+    "ApplicationWorkflow",
+    "WorkflowHistory",
+    "WorkflowStatus",
+    "WorkflowAction",
+    "AlertEvent",
+    "EvcRecord",
+    "EvcStatus",
+    "Undertaking",
+    "UndertakingStatus",
+    "UndertakingCategory",
+    "DocumentValidityRecord",
+    "ValidityStatus",
+    "NotificationRule",
+    "EscalationMatrix",
+    "EscalationRecord",
+    "SchedulerRunLog",
+    "SystemSetting",
 ]

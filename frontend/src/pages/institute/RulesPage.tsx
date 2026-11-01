@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
-  Gavel,
   Search,
   X,
   ChevronDown,
@@ -212,29 +211,21 @@ export const RulesPage: React.FC = () => {
       {/* =================================================================== */}
       {/* A. HEADER CARD                                                      */}
       {/* =================================================================== */}
-      <div className="bg-white rounded-[12px] p-5 sm:p-6 shadow-[0_6px_18px_rgba(0,0,0,0.18)] border border-slate-100 flex flex-col gap-4">
+      <div className="bg-white rounded-xl p-5 sm:p-6 shadow-sm border border-slate-200 flex flex-col gap-4">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          {/* Left: Gavel Icon + Titles */}
-          <div className="flex items-start gap-3.5">
-            <div className="w-12 h-12 rounded-[10px] bg-[#FCE0BE] text-[#E8650A] flex items-center justify-center shrink-0 shadow-sm">
-              <Gavel size={26} />
-            </div>
-            <div>
-              <div className="flex items-center gap-2.5 flex-wrap">
-                <h1 className="text-lg sm:text-xl font-bold text-[#0B3C9D] tracking-tight">
-                  AICTE Regulatory Checklist Rules
-                </h1>
-              </div>
-              <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
-                Official statutory guidelines from the Approval Process Handbook (APH 2026-27).
-              </p>
-            </div>
+          <div>
+            <h1 className="text-xl font-bold text-slate-900 tracking-tight">
+              Rules and timelines
+            </h1>
+            <p className="text-sm text-slate-600 mt-1">
+              Official statutory guidelines from the Approval Process Handbook (APH 2026-27).
+            </p>
           </div>
 
           {/* Right: Version & Last Updated Chips */}
           <div className="flex items-center gap-2 self-start lg:self-center shrink-0">
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200 select-none">
-              <Clock size={12} className="text-slate-400" />
+              <Clock size={12} className="text-slate-500" />
               <span>Updated: Oct 2026</span>
             </span>
             <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-[#E3F0FF] text-[#0B3C9D] border border-blue-200 select-none">
@@ -246,27 +237,27 @@ export const RulesPage: React.FC = () => {
         {/* Search input with live counter & clear button */}
         <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t border-slate-100">
           <div className="relative flex-1 max-w-xl">
-            <Search size={15} className="absolute left-3.5 top-3 text-[#7A8699]" />
+            <Search size={15} className="absolute left-3.5 top-3 text-slate-500" />
             <input
               type="text"
               placeholder="Search rule ID, title, description, or handbook section..."
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
-              className="w-full h-10 pl-10 pr-9 text-xs sm:text-sm rounded-lg border border-[#D5DBE5] text-[#0F2A5C] placeholder-[#7A8699] focus:border-[#F58220] focus:ring-2 focus:ring-[#F58220]/20 outline-none transition-all bg-white"
+              className="w-full h-10 pl-10 pr-9 text-xs sm:text-sm rounded-lg border border-[#D5DBE5] text-[#0F2A5C] placeholder:text-slate-500 focus:border-[#F58220] focus:ring-2 focus:ring-[#F58220]/20 outline-none transition-all bg-white"
             />
             {searchInput && (
               <button
                 type="button"
                 onClick={() => setSearchInput('')}
                 aria-label="Clear search input"
-                className="absolute right-2.5 top-2.5 p-1 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+                className="absolute right-2.5 top-2.5 p-1 rounded-md text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors"
               >
                 <X size={15} />
               </button>
             )}
           </div>
 
-          <div className="flex items-center gap-3 text-xs text-slate-500 shrink-0">
+          <div className="flex items-center gap-3 text-xs text-slate-600 shrink-0">
             <span className="font-semibold text-[#0F2A5C] bg-slate-100 px-3 py-1 rounded-full border border-slate-200">
               {isLoading ? 'Searching...' : `${totalFoundRules} rules found`}
             </span>
@@ -401,7 +392,7 @@ export const RulesPage: React.FC = () => {
           <div className="flex items-center gap-3 self-end sm:self-center">
             {/* Sort Dropdown */}
             <div className="flex items-center gap-1.5">
-              <ArrowUpDown size={14} className="text-slate-400" />
+              <ArrowUpDown size={14} className="text-slate-600" />
               <select
                 value={sortOrder}
                 onChange={(e) => setSortOrder(e.target.value as any)}
@@ -461,7 +452,7 @@ export const RulesPage: React.FC = () => {
       ) : totalFoundRules === 0 ? (
         // Empty State
         <div className="bg-white rounded-[12px] p-12 text-center shadow-[0_6px_18px_rgba(0,0,0,0.18)] border border-slate-100">
-          <BookOpen size={40} className="text-slate-300 mx-auto mb-3" />
+          <BookOpen size={40} className="text-slate-500 mx-auto mb-3" />
           <h3 className="text-base font-bold text-[#0F2A5C]">No rules match your search</h3>
           <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
             Try adjusting your search query, selecting another category, or resetting all filters.
@@ -505,7 +496,7 @@ export const RulesPage: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="p-1 rounded-md text-slate-400 hover:text-slate-700 transition-transform duration-200">
+                  <div className="p-1 rounded-md text-slate-600 hover:text-slate-700 transition-transform duration-200">
                     <ChevronDown
                       size={18}
                       className={`transform transition-transform duration-250 ${
@@ -559,7 +550,7 @@ export const RulesPage: React.FC = () => {
                                     onClick={(e) => handleCopyCode(rule.rule_code, e)}
                                     aria-label={`Copy rule code ${rule.rule_code}`}
                                     title="Copy Rule ID"
-                                    className="p-0.5 text-slate-400 hover:text-[#0B3C9D] rounded transition-colors"
+                                    className="p-0.5 text-slate-600 hover:text-[#0B3C9D] rounded transition-colors"
                                   >
                                     {isCopied ? (
                                       <Check size={12} className="text-green-600" />
@@ -614,7 +605,7 @@ export const RulesPage: React.FC = () => {
                                 >
                                   {isExpanded ? 'Show less' : 'Read more & view verification checks'}
                                 </button>
-                                <span className="text-slate-400">
+                                <span className="text-slate-600">
                                   <ChevronDown
                                     size={15}
                                     className={`transform transition-transform duration-200 ${

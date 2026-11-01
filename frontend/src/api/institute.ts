@@ -1,5 +1,31 @@
 import { apiClient } from './client';
 
+export interface InfrastructureData {
+  id?: number;
+  institute_id?: number;
+  application_id?: number;
+  total_built_up_area: number;
+  land_area: number;
+  classroom_count: number;
+  average_classroom_area: number;
+  laboratory_count: number;
+  library_area: number;
+  library_books_count: number;
+  total_sanctioned_intake: number;
+  faculty_count: number;
+  student_count: number;
+  computers_available: number;
+  internet_bandwidth_mbps: number;
+  barrier_free_facilities: boolean;
+  fire_safety_installed: boolean;
+  status: 'DRAFT' | 'SUBMITTED';
+  built_up_area_per_intake?: number;
+  faculty_student_ratio?: number;
+  computer_student_ratio?: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface DashboardData {
   institute_id: number;
   aicte_institute_id: string;
@@ -69,7 +95,7 @@ export interface ApplicationItem {
   category: string;
   academic_year: string;
   programme: string;
-  status: 'DRAFT' | 'SUBMITTED' | 'UNDER_REVIEW' | 'APPROVED' | 'REJECTED';
+  status: 'DRAFT' | 'SUBMITTED' | 'UNDER_REVIEW' | 'APPROVED' | 'REJECTED' | 'RETURNED' | 'ON_HOLD';
   filed_on?: string;
   created_at: string;
 }
@@ -618,6 +644,14 @@ export const instituteApi = {
     return res.data;
   },
 
+  getInfrastructure: async (appId: string | number): Promise<InfrastructureData> => {
+    const res = await apiClient.get<InfrastructureData>(`/api/applications/${appId}/infrastructure`);
+    return res.data;
+  },
+  updateInfrastructure: async (appId: string | number, payload: Partial<InfrastructureData>): Promise<InfrastructureData> => {
+    const res = await apiClient.put<InfrastructureData>(`/api/applications/${appId}/infrastructure`, payload);
+    return res.data;
+  },
   getWhyFailed: async (appId: string | number, lang: 'en' | 'hi' = 'en'): Promise<WhyFailedData> => {
     const res = await apiClient.get<WhyFailedData>(`/api/institute/applications/${appId}/why-failed?lang=${lang}`);
     return res.data;

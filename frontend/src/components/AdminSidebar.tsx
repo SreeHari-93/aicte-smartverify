@@ -2,36 +2,57 @@ import React from 'react';
 import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard,
-  Scale,
-  Files,
-  ListChecks,
-  Clock,
-  AlertTriangle,
+  GitBranch,
+  FileText,
+  Users,
+  FileSignature,
+  ShieldCheck,
+  Bell,
   MessageSquare,
+  Scale,
   FileBarChart,
-  ScrollText,
   Cpu,
+  CheckSquare,
+  ScrollText,
 } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
 interface AdminSidebarProps {
   isOpen?: boolean;
   onClose?: () => void;
 }
 
+// Exact admin sidebar order for PS 26262:
+// Dashboard, Workflow, Applications, EVC, Undertakings, Document Validity, Alerts, Complaints, Rules & Timelines, Reports, Evaluation, Audit Log
 export const ADMIN_NAV_ITEMS = [
   { label: 'Dashboard', path: '/admin/dashboard', icon: LayoutDashboard },
-  { label: 'Rules', path: '/admin/rules', icon: Scale },
-  { label: 'Document Types', path: '/admin/document-types', icon: Files },
-  { label: 'Checklists', path: '/admin/checklists', icon: ListChecks },
-  { label: 'Verification Queue', path: '/admin/verification-queue', icon: Clock },
-  { label: 'Anomalies', path: '/admin/anomalies', icon: AlertTriangle },
+  { label: 'Workflow', path: '/admin/workflow', icon: GitBranch },
+  { label: 'Applications', path: '/admin/applications', icon: FileText },
+  { label: 'EVC visits', path: '/admin/evc', icon: Users },
+  { label: 'Undertakings', path: '/admin/undertakings', icon: FileSignature },
+  { label: 'Document validity', path: '/admin/validity', icon: ShieldCheck },
+  { label: 'Alerts', path: '/admin/alerts', icon: Bell },
   { label: 'Complaints', path: '/admin/complaints', icon: MessageSquare },
-  { label: 'AI Evaluation', path: '/admin/evaluation', icon: Cpu },
+  { label: 'Rules and timelines', path: '/admin/rules', icon: Scale },
   { label: 'Reports', path: '/admin/reports', icon: FileBarChart },
-  { label: 'Audit Log', path: '/admin/audit-log', icon: ScrollText },
+  { label: 'Evaluation', path: '/admin/evaluation', icon: Cpu },
+  { label: 'Coverage', path: '/admin/coverage', icon: CheckSquare },
+  { label: 'Audit log', path: '/admin/audit-log', icon: ScrollText },
 ];
 
 export const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen = false, onClose }) => {
+  const { user } = useAuth();
+
+  // Role-based filtering: Committee member sees only Dashboard, EVC, Applications (assigned only), and Alerts
+  const navItems = React.useMemo(() => {
+    if (user?.role === 'COMMITTEE_MEMBER') {
+      return ADMIN_NAV_ITEMS.filter((item) =>
+        ['/admin/dashboard', '/admin/evc', '/admin/applications', '/admin/alerts'].includes(item.path)
+      );
+    }
+    return ADMIN_NAV_ITEMS;
+  }, [user?.role]);
+
   return (
     <>
       {/* Mobile Backdrop */}
@@ -49,13 +70,13 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen = false, onCl
           isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         }`}
       >
-        <nav className="flex flex-col gap-1.5" role="navigation" aria-label="Admin Portal Navigation">
+        <nav className="flex flex-col gap-1 overflow-y-auto pr-1" role="navigation" aria-label="Admin Portal Navigation">
           <div className="px-3 pb-2 mb-1 border-b border-[#EFE3CF]/80">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-[#0B3C9D]/70">
-              Admin Governance
+            <span className="text-xs font-semibold text-slate-600">
+              Menu
             </span>
           </div>
-          {ADMIN_NAV_ITEMS.map((item) => {
+          {navItems.map((item) => {
             const Icon = item.icon;
             return (
               <NavLink
@@ -63,7 +84,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen = false, onCl
                 to={item.path}
                 onClick={onClose}
                 className={({ isActive }) =>
-                  `flex items-center gap-3.5 px-4 py-2.5 rounded-[8px] transition-all duration-150 group ${
+                  `flex items-center gap-3 px-3.5 py-2 rounded-[8px] transition-all duration-150 group ${
                     isActive
                       ? 'bg-[#FCE0BE] text-[#0B3C9D] font-semibold shadow-xs'
                       : 'text-[#0B3C9D] hover:bg-[#FCE0BE]/60 font-medium'
@@ -73,12 +94,12 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen = false, onCl
                 {({ isActive }) => (
                   <>
                     <Icon
-                      size={19}
+                      size={18}
                       className={`shrink-0 transition-colors ${
                         isActive ? 'text-[#0F2A5C]' : 'text-[#0F2A5C]/80 group-hover:text-[#0F2A5C]'
                       }`}
                     />
-                    <span className="text-[15px] tracking-tight leading-none text-[#0B3C9D]">
+                    <span className="text-[14px] tracking-tight leading-none text-[#0B3C9D]">
                       {item.label}
                     </span>
                   </>
@@ -91,4 +112,3 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen = false, onCl
     </>
   );
 };
-

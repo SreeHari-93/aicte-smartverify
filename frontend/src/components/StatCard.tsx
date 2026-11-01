@@ -56,21 +56,20 @@ export const StatCard: React.FC<StatCardProps> = ({
 
   return (
     <div
-      className={`bg-white rounded-[12px] p-6 shadow-[0_6px_18px_rgba(0,0,0,0.18)] border border-slate-100 flex items-center gap-5 transition-transform hover:-translate-y-0.5 duration-200 ${className}`}
+      className={`bg-white rounded-lg p-5 shadow-sm border border-slate-200 flex items-center gap-4 ${className}`}
     >
-      {/* Tinted Inner Panel with Circular Icon */}
-      <div className={`w-14 h-14 rounded-full flex items-center justify-center shrink-0 ${styles.iconBg} ${styles.iconColor}`}>
+      <div className={`w-12 h-12 rounded-lg flex items-center justify-center shrink-0 ${styles.iconBg} ${styles.iconColor}`}>
         {icon}
       </div>
 
       <div className="flex flex-col min-w-0 flex-1">
-        <span className="text-xs font-semibold uppercase tracking-wider text-[#0F2A5C]/70 truncate">
+        <span className="text-xs font-medium text-slate-600 truncate">
           {label}
         </span>
-        <span className="text-3xl font-bold text-[#0F2A5C] mt-0.5 tracking-tight font-sans">
+        <span className="text-2xl font-bold text-[#0F2A5C] mt-0.5 tracking-tight font-sans">
           {value}
         </span>
-        {subtitle && <span className="text-xs text-slate-500 mt-0.5">{subtitle}</span>}
+        {subtitle && <span className="text-xs text-slate-600 mt-0.5">{subtitle}</span>}
       </div>
     </div>
   );

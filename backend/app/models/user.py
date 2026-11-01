@@ -8,6 +8,9 @@ class UserRole:
     INSTITUTE = "INSTITUTE"
     ADMIN = "ADMIN"
     REVIEWER = "REVIEWER"
+    REGIONAL_OFFICER = "REGIONAL_OFFICER"
+    BUREAU_OFFICER = "BUREAU_OFFICER"
+    COMMITTEE_MEMBER = "COMMITTEE_MEMBER"
 
 
 class User(Base):
@@ -18,6 +21,7 @@ class User(Base):
     email = Column(String(255), unique=True, index=True, nullable=False)
     password_hash = Column(String(255), nullable=False)
     institute_id = Column(Integer, ForeignKey("institutes.id"), nullable=True)
+    region = Column(String(100), nullable=True)  # For Regional Officers (e.g., Southern, Northern)
     is_active = Column(Boolean, default=True, nullable=False)
     failed_attempts = Column(Integer, default=0, nullable=False)
     locked_until = Column(DateTime, nullable=True)

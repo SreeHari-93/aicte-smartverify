@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     
     # Security Policies
-    CAPTCHA_EXPIRE_SECONDS: int = 120  # 2 minutes
+    CAPTCHA_EXPIRE_SECONDS: int = 600  # 10 minutes
     MAX_LOGIN_ATTEMPTS: int = 5
     LOCKOUT_MINUTES: int = 15
     RATE_LIMIT_PER_MINUTE: int = 5

@@ -1,0 +1,23 @@
+# Python environments and cache
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+backend/venv/
+
+# Node modules
+node_modules/
+frontend/node_modules/
+
+# Git and editor files
+.git/
+.gitignore
+.vscode/
+.idea/
+
+# Test database and temp files
+test_aicte.db
+*.db-journal
+*.log
+

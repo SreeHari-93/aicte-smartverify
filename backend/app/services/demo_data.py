@@ -2,7 +2,7 @@ import os
 import hashlib
 import json
 from datetime import date, datetime, timedelta, timezone
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
@@ -248,6 +248,7 @@ class DemoDataSeeder:
             app=app_ready,
             doc_specs=make_docs_for_app("DEMO-READY", {}),
         )
+        cls._upsert_infrastructure(db=db, app=app_ready, institute_id=skcet.id)
         seeded_apps["DEMO-READY"] = app_ready
 
         # ----------------------------------------------------------------------
@@ -271,6 +272,7 @@ class DemoDataSeeder:
                 {"OCCUPANCY_CERT": {"expiry_date": exp_soon, "status": "EXPIRING_SOON"}},
             ),
         )
+        cls._upsert_infrastructure(db=db, app=app_attention, institute_id=skcet.id)
         seeded_apps["DEMO-ATTENTION"] = app_attention
 
         # ----------------------------------------------------------------------
@@ -298,6 +300,7 @@ class DemoDataSeeder:
                 },
             ),
         )
+        cls._upsert_infrastructure(db=db, app=app_likely_fail, institute_id=skcet.id)
         seeded_apps["DEMO-LIKELY-FAIL"] = app_likely_fail
 
         # ----------------------------------------------------------------------
@@ -321,11 +324,56 @@ class DemoDataSeeder:
                 omit_types=["FIRE_NOC"],  # Missing mandatory Fire NOC!
             ),
         )
+        cls._upsert_infrastructure(db=db, app=app_blocked, institute_id=skcet.id)
         seeded_apps["DEMO-BLOCKED"] = app_blocked
 
         return seeded_apps
 
         return seeded_apps
+
+    @classmethod
+    def _upsert_infrastructure(
+        cls,
+        db: Session,
+        app: Application,
+        institute_id: int,
+        overrides: Optional[Dict[str, Any]] = None,
+    ):
+        from backend.app.models.infrastructure import InfrastructureDetail
+        infra = db.query(InfrastructureDetail).filter(InfrastructureDetail.application_id == app.id).first()
+        defaults = {
+            "total_built_up_area": 42500.0,
+            "land_area": 50000.0,
+            "classroom_count": 36,
+            "average_classroom_area": 68.0,
+            "laboratory_count": 24,
+            "library_area": 1200.0,
+            "library_books_count": 25000,
+            "total_sanctioned_intake": 720,
+            "faculty_count": 120,
+            "student_count": 2160,
+            "computers_available": 650,
+            "internet_bandwidth_mbps": 1000.0,
+            "barrier_free_facilities": True,
+            "fire_safety_installed": True,
+            "status": "SUBMITTED",
+        }
+        if overrides:
+            defaults.update(overrides)
+
+        if not infra:
+            infra = InfrastructureDetail(
+                institute_id=institute_id,
+                application_id=app.id,
+                **defaults,
+            )
+            db.add(infra)
+        else:
+            for k, v in defaults.items():
+                setattr(infra, k, v)
+        db.commit()
+        db.refresh(infra)
+        return infra
 
     @classmethod
     def _upsert_application(

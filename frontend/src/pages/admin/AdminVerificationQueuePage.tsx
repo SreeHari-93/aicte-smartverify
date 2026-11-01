@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Clock,
   Search,
   Filter,
   CheckCircle2,
@@ -141,25 +140,21 @@ export const AdminVerificationQueuePage: React.FC = () => {
   return (
     <div className="space-y-6 pb-12 animate-fade-in">
       {/* Header Banner */}
-      <div className="bg-white rounded-[12px] p-6 shadow-[0_6px_18px_rgba(0,0,0,0.18)] border border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2.5">
-            <Clock size={22} className="text-[#0B3C9D]" />
-            <h1 className="text-xl font-bold text-[#0B3C9D] tracking-tight">
-              Statutory Verification Scrutiny Queue
-            </h1>
-          </div>
-          <p className="text-xs text-slate-500 mt-1">
-            Manual and automated external registry verification. Core rule:{' '}
-            <strong className="text-[#0F2A5C]">"Rules decide, AI explains, Officials approve."</strong>
+          <h1 className="text-xl font-bold text-slate-900 tracking-tight">
+            Verification queue
+          </h1>
+          <p className="text-sm text-slate-600 mt-1">
+            Manual and automated external registry verification. Rules decide, AI explains, Officials approve.
           </p>
         </div>
         <button
           onClick={fetchData}
           disabled={isLoading}
-          className="inline-flex items-center gap-1.5 px-3 py-2 bg-slate-50 border border-slate-200 hover:bg-slate-100 text-slate-700 rounded-lg text-xs font-semibold transition-colors shrink-0"
+          className="inline-flex items-center gap-1.5 px-3 py-2 bg-white border border-slate-300 hover:border-slate-400 text-slate-700 rounded-lg text-xs font-semibold transition-colors shrink-0 shadow-sm"
         >
-          <RefreshCw size={14} className={isLoading ? 'animate-spin text-[#F58220]' : ''} />
+          <RefreshCw size={14} className={isLoading ? 'animate-spin text-[#0B3C9D]' : ''} />
           <span>Refresh Queue</span>
         </button>
       </div>
@@ -177,16 +172,16 @@ export const AdminVerificationQueuePage: React.FC = () => {
       )}
 
       {/* Filter and Search Bar */}
-      <div className="bg-white rounded-[12px] p-4 shadow-[0_4px_12px_rgba(0,0,0,0.06)] border border-slate-200 flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
+      <div className="bg-white rounded-xl p-4 shadow-sm border border-slate-200 flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
         <form onSubmit={handleSearchSubmit} className="flex-1 flex items-center gap-2">
           <div className="relative flex-1">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
             <input
               type="text"
               placeholder="Search by filename, institute name or ID..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full h-10 pl-9 pr-3 rounded-lg border border-slate-200 text-xs focus:border-[#0B3C9D] outline-none"
+              className="w-full h-10 pl-9 pr-3 rounded-lg border border-slate-300 text-xs focus:border-[#0B3C9D] outline-none placeholder:text-slate-500 text-slate-800"
             />
           </div>
           <button
@@ -198,7 +193,7 @@ export const AdminVerificationQueuePage: React.FC = () => {
         </form>
 
         <div className="flex flex-wrap items-center gap-2.5">
-          <div className="flex items-center gap-1 text-xs text-slate-500 font-semibold">
+          <div className="flex items-center gap-1 text-xs text-slate-600 font-semibold">
             <Filter size={14} />
             <span>Filters:</span>
           </div>
@@ -206,7 +201,7 @@ export const AdminVerificationQueuePage: React.FC = () => {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="h-10 px-3 rounded-lg border border-slate-200 text-xs bg-white text-slate-700 focus:border-[#0B3C9D] outline-none"
+            className="h-10 px-3 rounded-lg border border-slate-300 text-xs bg-white text-slate-700 focus:border-[#0B3C9D] outline-none"
           >
             <option value="">Status: All Unresolved</option>
             <option value="MANUAL_REVIEW_REQUIRED">Manual Review Required</option>
@@ -220,7 +215,7 @@ export const AdminVerificationQueuePage: React.FC = () => {
           <select
             value={docTypeFilter}
             onChange={(e) => setDocTypeFilter(e.target.value)}
-            className="h-10 px-3 rounded-lg border border-slate-200 text-xs bg-white text-slate-700 focus:border-[#0B3C9D] outline-none max-w-[200px]"
+            className="h-10 px-3 rounded-lg border border-slate-300 text-xs bg-white text-slate-700 focus:border-[#0B3C9D] outline-none max-w-[200px]"
           >
             <option value="">Doc Type: All</option>
             {docTypes.map((dt) => (
@@ -233,34 +228,34 @@ export const AdminVerificationQueuePage: React.FC = () => {
       </div>
 
       {/* Main Verification Table */}
-      <div className="bg-white rounded-[12px] shadow-[0_6px_18px_rgba(0,0,0,0.18)] border border-slate-100 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-xs">
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="table-container">
+          <table className="aicte-table">
             <thead>
-              <tr className="bg-[#E3F0FF] text-[#0B3C9D] uppercase text-[11px] font-bold tracking-wider">
-                <th className="py-3 px-4">Institute</th>
-                <th className="py-3 px-3">Document Type</th>
-                <th className="py-3 px-3">File Name</th>
-                <th className="py-3 px-3">Current Status</th>
-                <th className="py-3 px-3 text-center">Age</th>
-                <th className="py-3 px-3">Assigned Officer</th>
-                <th className="py-3 px-4 text-center">Actions</th>
+              <tr className="bg-slate-50 text-slate-600 font-semibold border-b border-slate-200 text-xs">
+                <th className="py-2.5 px-3 w-[20%]">Institute</th>
+                <th className="py-2.5 px-3 w-[18%]">Document type</th>
+                <th className="py-2.5 px-3 w-[18%]">File name</th>
+                <th className="py-2.5 px-3 w-[14%]">Status</th>
+                <th className="py-2.5 px-3 w-[10%] text-center">Age</th>
+                <th className="py-2.5 px-3 w-[12%]">Officer</th>
+                <th className="py-2.5 px-3 w-[80px] text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
               {isLoading ? (
                 <tr>
-                  <td colSpan={7} className="py-12 text-center text-slate-400">
-                    <Loader2 size={24} className="animate-spin mx-auto mb-2 text-[#F58220]" />
+                  <td colSpan={7} className="py-12 text-center text-slate-600">
+                    <Loader2 size={24} className="animate-spin mx-auto mb-2 text-[#0B3C9D]" />
                     <span>Loading statutory verification queue...</span>
                   </td>
                 </tr>
               ) : items.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-12 text-center text-slate-400">
-                    <CheckCircle2 size={28} className="mx-auto mb-2 text-emerald-500 opacity-60" />
-                    <p className="font-semibold text-slate-600">Verification queue is clear!</p>
-                    <p className="text-[11px] text-slate-400 mt-0.5">
+                  <td colSpan={7} className="py-12 text-center text-slate-600">
+                    <CheckCircle2 size={28} className="mx-auto mb-2 text-emerald-600" />
+                    <p className="font-semibold text-slate-700">Verification queue is clear!</p>
+                    <p className="text-[11px] text-slate-600 mt-0.5">
                       No documents currently require manual review or external authority action.
                     </p>
                   </td>
@@ -270,31 +265,31 @@ export const AdminVerificationQueuePage: React.FC = () => {
                   <tr key={`${item.document_id}-${item.id}`} className="hover:bg-slate-50/80 transition-colors">
                     <td className="py-3 px-4">
                       <div className="font-bold text-[#0F2A5C] flex items-center gap-1.5">
-                        <Building size={14} className="text-slate-400 shrink-0" />
+                        <Building size={14} className="text-slate-500 shrink-0" />
                         <span className="truncate max-w-[200px]" title={item.institute_name}>
                           {item.institute_name}
                         </span>
                       </div>
-                      <span className="text-[11px] text-slate-400 font-mono">ID: #{item.institute_id}</span>
+                      <span className="text-[11px] text-slate-600 font-mono">ID: #{item.institute_id}</span>
                     </td>
 
                     <td className="py-3 px-3">
                       <span className="inline-block px-2 py-0.5 rounded bg-blue-50 text-[#0B3C9D] text-[11px] font-bold">
                         {item.document_type_code || 'DOCUMENT'}
                       </span>
-                      <p className="text-[10px] text-slate-500 truncate max-w-[150px]">
+                      <p className="text-[10px] text-slate-600 truncate max-w-[150px]">
                         {item.document_type_name}
                       </p>
                     </td>
 
                     <td className="py-3 px-3">
                       <div className="flex items-center gap-1.5">
-                        <FileText size={14} className="text-slate-400 shrink-0" />
+                        <FileText size={14} className="text-slate-500 shrink-0" />
                         <span className="font-semibold text-slate-800 truncate max-w-[180px]" title={item.document_filename}>
                           {item.document_filename}
                         </span>
                       </div>
-                      <span className="text-[10px] text-slate-400 font-mono">
+                      <span className="text-[10px] text-slate-600 font-mono">
                         {Math.round(item.file_size / 1024)} KB
                       </span>
                     </td>
@@ -302,7 +297,7 @@ export const AdminVerificationQueuePage: React.FC = () => {
                     <td className="py-3 px-3">
                       <StatusPill status={item.status} />
                       {item.manual_decision && (
-                        <div className="text-[10px] text-slate-500 mt-1 font-semibold">
+                        <div className="text-[10px] text-slate-700 mt-1 font-semibold">
                           Overridden: <span className="text-emerald-700 font-bold">{item.manual_decision}</span>
                         </div>
                       )}
@@ -310,15 +305,15 @@ export const AdminVerificationQueuePage: React.FC = () => {
 
                     <td className="py-3 px-3 text-center">
                       <span className={`inline-block px-2 py-0.5 rounded-full text-[11px] font-bold ${
-                        item.age_days > 7 ? 'bg-red-50 text-red-700' : 'bg-slate-100 text-slate-600'
+                        item.age_days > 7 ? 'bg-red-50 text-red-700' : 'bg-slate-100 text-slate-700'
                       }`}>
                         {item.age_days}d
                       </span>
                     </td>
 
                     <td className="py-3 px-3">
-                      <div className="flex items-center gap-1.5 text-slate-600">
-                        <UserCheck size={14} className={item.assigned_officer_name ? 'text-[#0B3C9D]' : 'text-slate-300'} />
+                      <div className="flex items-center gap-1.5 text-slate-700">
+                        <UserCheck size={14} className={item.assigned_officer_name ? 'text-[#0B3C9D]' : 'text-slate-600'} />
                         <span className="text-[11px] truncate max-w-[130px]">
                           {item.assigned_officer_name || 'Unassigned'}
                         </span>
@@ -383,11 +378,11 @@ export const AdminVerificationQueuePage: React.FC = () => {
               </div>
               <div className="grid grid-cols-2 gap-2 text-[11px]">
                 <div>
-                  <span className="text-slate-400 block">Original Automated Status:</span>
+                  <span className="text-slate-600 block">Original Automated Status:</span>
                   <span className="font-bold text-slate-700">{selectedItem.original_status || 'N/A'}</span>
                 </div>
                 <div>
-                  <span className="text-slate-400 block">Statutory Source:</span>
+                  <span className="text-slate-600 block">Statutory Source:</span>
                   <span className="font-bold text-[#0B3C9D]">{selectedItem.source_name || 'External Registry'}</span>
                 </div>
               </div>
@@ -399,7 +394,7 @@ export const AdminVerificationQueuePage: React.FC = () => {
                     <span className="font-bold text-emerald-800 uppercase">{selectedItem.manual_decision}</span>
                   </div>
                   <p className="text-slate-700 text-[11px] italic">"{selectedItem.manual_reason}"</p>
-                  <span className="text-[10px] text-slate-400 mt-1 block">
+                  <span className="text-[10px] text-slate-600 mt-1 block">
                     Reviewed on {selectedItem.manual_reviewed_at ? new Date(selectedItem.manual_reviewed_at).toLocaleString('en-GB') : 'N/A'}
                   </span>
                 </div>
@@ -410,7 +405,7 @@ export const AdminVerificationQueuePage: React.FC = () => {
             <div>
               <h4 className="font-bold text-[#0F2A5C] uppercase tracking-wider mb-2 flex items-center justify-between">
                 <span>Side-by-Side Field Verification</span>
-                <span className="text-[10px] text-slate-400 font-normal">Extracted OCR vs Authority Data</span>
+                <span className="text-[10px] text-slate-600 font-normal">Extracted OCR vs Authority Data</span>
               </h4>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -421,7 +416,7 @@ export const AdminVerificationQueuePage: React.FC = () => {
                     <span>Extracted Document Values</span>
                   </div>
                   {Object.keys(selectedItem.extracted_fields || {}).length === 0 ? (
-                    <p className="text-slate-400 italic text-[11px]">No OCR fields extracted yet.</p>
+                    <p className="text-slate-600 italic text-[11px]">No OCR fields extracted yet.</p>
                   ) : (
                     <div className="space-y-1.5 font-mono text-[11px]">
                       {Object.entries(selectedItem.extracted_fields).map(([k, v]) => (
@@ -443,7 +438,7 @@ export const AdminVerificationQueuePage: React.FC = () => {
                     <span>Official Authority Record</span>
                   </div>
                   {Object.keys(selectedItem.official_values || {}).length === 0 ? (
-                    <p className="text-slate-400 italic text-[11px]">No external authority record matched.</p>
+                    <p className="text-slate-600 italic text-[11px]">No external authority record matched.</p>
                   ) : (
                     <div className="space-y-1.5 font-mono text-[11px]">
                       {Object.entries(selectedItem.official_values).map(([k, v]) => (
@@ -491,7 +486,7 @@ export const AdminVerificationQueuePage: React.FC = () => {
                     <div className="absolute -left-[21px] top-1 w-2.5 h-2.5 rounded-full bg-[#0B3C9D]" />
                     <div className="flex items-center justify-between">
                       <span className="font-bold text-[#0F2A5C] text-xs">{tl.event}</span>
-                      <span className="text-[10px] text-slate-400">
+                      <span className="text-[10px] text-slate-600">
                         {tl.timestamp ? new Date(tl.timestamp).toLocaleString('en-GB') : ''}
                       </span>
                     </div>
@@ -531,7 +526,7 @@ export const AdminVerificationQueuePage: React.FC = () => {
                       type="button"
                       disabled={isSubmittingFeedback}
                       onClick={() => handleFeedback(true)}
-                      className="flex-1 py-1.5 px-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 border border-emerald-200 transition-colors disabled:opacity-50"
+                      className="flex-1 py-1.5 px-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 border border-emerald-200 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                     >
                       <ThumbsUp size={13} />
                       <span>Mark AI Correct</span>
@@ -540,7 +535,7 @@ export const AdminVerificationQueuePage: React.FC = () => {
                       type="button"
                       disabled={isSubmittingFeedback}
                       onClick={() => handleFeedback(false)}
-                      className="flex-1 py-1.5 px-3 bg-red-50 hover:bg-red-100 text-red-800 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 border border-red-200 transition-colors disabled:opacity-50"
+                      className="flex-1 py-1.5 px-3 bg-red-50 hover:bg-red-100 text-red-800 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 border border-red-200 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                     >
                       <ThumbsDown size={13} />
                       <span>Mark AI Incorrect</span>
@@ -608,7 +603,7 @@ export const AdminVerificationQueuePage: React.FC = () => {
                 type="button"
                 disabled={isSubmitting || !decisionReason.trim()}
                 onClick={(e) => handleDecisionSubmit(e as any)}
-                className={`h-11 px-6 text-white font-bold rounded-xl shadow-sm transition-colors flex items-center gap-2 text-sm disabled:opacity-50 ${
+                className={`h-11 px-6 text-white font-bold rounded-xl shadow-sm transition-colors flex items-center gap-2 text-sm disabled:opacity-60 disabled:cursor-not-allowed ${
                   decisionType === 'APPROVED'
                     ? 'bg-emerald-600 hover:bg-emerald-700'
                     : decisionType === 'REJECTED'

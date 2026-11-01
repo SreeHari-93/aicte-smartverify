@@ -219,9 +219,56 @@ class ValidationRunner:
             }
             docs_list.append(doc_entry)
 
+        # Infrastructure Details
+        from backend.app.models.infrastructure import InfrastructureDetail
+        infra_record = (
+            db.query(InfrastructureDetail)
+            .filter(InfrastructureDetail.application_id == application.id)
+            .first()
+        )
+
+        infra_dict: Dict[str, Any] = {}
+        if infra_record:
+            total_intake = infra_record.total_sanctioned_intake or app_dict.get("intake_total") or 0
+            built_up = infra_record.total_built_up_area or 0.0
+            built_up_per_intake = round(built_up / total_intake, 2) if total_intake > 0 else 0.0
+
+            fac = infra_record.faculty_count or 0
+            stud = infra_record.student_count or 0
+            fsr = round(stud / fac, 2) if fac > 0 else 0.0
+
+            comp = infra_record.computers_available or 0
+            csr = round(comp / stud, 3) if stud > 0 else 0.0
+
+            infra_dict = {
+                "id": infra_record.id,
+                "institute_id": infra_record.institute_id,
+                "application_id": infra_record.application_id,
+                "total_built_up_area": built_up,
+                "built_up_area": built_up,
+                "land_area": infra_record.land_area or 0.0,
+                "classroom_count": infra_record.classroom_count or 0,
+                "average_classroom_area": infra_record.average_classroom_area or 0.0,
+                "laboratory_count": infra_record.laboratory_count or 0,
+                "library_area": infra_record.library_area or 0.0,
+                "library_books_count": infra_record.library_books_count or 0,
+                "total_sanctioned_intake": total_intake,
+                "faculty_count": fac,
+                "student_count": stud,
+                "computers_available": comp,
+                "internet_bandwidth_mbps": infra_record.internet_bandwidth_mbps or 0.0,
+                "barrier_free_facilities": infra_record.barrier_free_facilities,
+                "fire_safety_installed": infra_record.fire_safety_installed,
+                "status": infra_record.status,
+                "built_up_area_per_intake": built_up_per_intake,
+                "faculty_student_ratio": fsr,
+                "computer_student_ratio": csr,
+            }
+
         return EvaluationContext(
             application=app_dict,
             institute=inst_dict,
+            infrastructure=infra_dict,
             documents=docs_list,
             courses=courses_list,
             certificates=certs_list,

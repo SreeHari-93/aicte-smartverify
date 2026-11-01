@@ -403,6 +403,218 @@ RULES_CATALOG: List[Dict[str, Any]] = [
         "evidence_required": ["FIRE_NOC", "BARRIER_FREE"],
         "suggested_action": "Submit both valid Fire NOC and Barrier-Free accessibility certificates.",
     },
+    # ----------------------------------------------------------------------
+    # Stage 6 Infrastructure Compliance Rules (APH 2026-27 Norms)
+    # Thresholds are editable rule parameters, not hard-coded.
+    # ----------------------------------------------------------------------
+    {
+        "rule_code": "INFRA-BUILTUP-PER-INTAKE",
+        "category": "Infrastructure & Land",
+        "title": "Minimum Built-up Area per Sanctioned Intake",
+        "description": "Total institutional built-up area per approved student intake must satisfy the minimum prescribed norm. Example thresholds for demonstration; set by AICTE norms.",
+        "handbook_reference": "Section 4.1.1",
+        "version": "v2026.1",
+        "is_mandatory": True,
+        "rule_type": "INFRASTRUCTURE",
+        "severity": "BLOCKER",
+        "applies_to_categories": ["EOA", "INTAKE_CHANGE", "NEW_INSTITUTE"],
+        "definition": {
+            "evaluator": "INFRASTRUCTURE",
+            "metric": "built_up_area_per_intake",
+            "operator": ">=",
+            "target": 4.0,
+            "unit": "sq m/student",
+        },
+        "evidence_required": ["BUILDING_PLAN"],
+        "suggested_action": "Augment institutional built-up area to achieve at least 4.0 sq m per student intake.",
+    },
+    {
+        "rule_code": "INFRA-CLASSROOM-COUNT",
+        "category": "Infrastructure & Classrooms",
+        "title": "Minimum Instructional Classrooms Count",
+        "description": "Institution must provide the minimum number of dedicated instructional classrooms. Example thresholds for demonstration; set by AICTE norms.",
+        "handbook_reference": "Section 4.1.2",
+        "version": "v2026.1",
+        "is_mandatory": True,
+        "rule_type": "INFRASTRUCTURE",
+        "severity": "BLOCKER",
+        "applies_to_categories": ["EOA", "INTAKE_CHANGE", "NEW_INSTITUTE"],
+        "definition": {
+            "evaluator": "INFRASTRUCTURE",
+            "metric": "classroom_count",
+            "operator": ">=",
+            "target": 16,
+            "unit": "classrooms",
+        },
+        "evidence_required": ["BUILDING_PLAN"],
+        "suggested_action": "Ensure at least 16 instructional classrooms are provisioned and equipped.",
+    },
+    {
+        "rule_code": "INFRA-CLASSROOM-AVG-AREA",
+        "category": "Infrastructure & Classrooms",
+        "title": "Minimum Average Classroom Carpet Area",
+        "description": "Average carpet area per instructional classroom must meet AICTE standard. Example thresholds for demonstration; set by AICTE norms.",
+        "handbook_reference": "Section 4.1.3",
+        "version": "v2026.1",
+        "is_mandatory": True,
+        "rule_type": "INFRASTRUCTURE",
+        "severity": "BLOCKER",
+        "applies_to_categories": ["EOA", "INTAKE_CHANGE", "NEW_INSTITUTE"],
+        "definition": {
+            "evaluator": "INFRASTRUCTURE",
+            "metric": "average_classroom_area",
+            "operator": ">=",
+            "target": 66.0,
+            "unit": "sq m",
+        },
+        "evidence_required": ["BUILDING_PLAN"],
+        "suggested_action": "Expand classroom dimensions to maintain an average carpet area of at least 66.0 sq m.",
+    },
+    {
+        "rule_code": "INFRA-LABORATORY-COUNT",
+        "category": "Infrastructure & Laboratories",
+        "title": "Minimum Laboratories and Workshops",
+        "description": "Prescribed number of domain-specific laboratories and engineering workshops. Example thresholds for demonstration; set by AICTE norms.",
+        "handbook_reference": "Section 4.2.1",
+        "version": "v2026.1",
+        "is_mandatory": False,
+        "rule_type": "INFRASTRUCTURE",
+        "severity": "WARNING",
+        "applies_to_categories": ["EOA", "INTAKE_CHANGE", "NEW_INSTITUTE"],
+        "definition": {
+            "evaluator": "INFRASTRUCTURE",
+            "metric": "laboratory_count",
+            "operator": ">=",
+            "target": 20,
+            "unit": "laboratories",
+        },
+        "evidence_required": ["EQUIP_LIST"],
+        "suggested_action": "Provision additional specialized engineering laboratories to satisfy curriculum requirements.",
+    },
+    {
+        "rule_code": "INFRA-LIBRARY-AREA",
+        "category": "Library & Information Resources",
+        "title": "Minimum Central Library Reading & Stack Area",
+        "description": "Central library reading room and book stack carpet area. Example thresholds for demonstration; set by AICTE norms.",
+        "handbook_reference": "Section 4.4.1",
+        "version": "v2026.1",
+        "is_mandatory": True,
+        "rule_type": "INFRASTRUCTURE",
+        "severity": "BLOCKER",
+        "applies_to_categories": ["EOA", "INTAKE_CHANGE", "NEW_INSTITUTE"],
+        "definition": {
+            "evaluator": "INFRASTRUCTURE",
+            "metric": "library_area",
+            "operator": ">=",
+            "target": 400.0,
+            "unit": "sq m",
+        },
+        "evidence_required": ["BUILDING_PLAN"],
+        "suggested_action": "Expand library reading rooms and reference stacks to at least 400.0 sq m.",
+    },
+    {
+        "rule_code": "INFRA-LIBRARY-BOOKS",
+        "category": "Library & Information Resources",
+        "title": "Minimum Technical Library Volumes and Titles",
+        "description": "Prescribed stock of technical volumes, standard textbooks, and international titles. Example thresholds for demonstration; set by AICTE norms.",
+        "handbook_reference": "Section 4.4.2",
+        "version": "v2026.1",
+        "is_mandatory": False,
+        "rule_type": "INFRASTRUCTURE",
+        "severity": "WARNING",
+        "applies_to_categories": ["EOA", "INTAKE_CHANGE"],
+        "definition": {
+            "evaluator": "INFRASTRUCTURE",
+            "metric": "library_books_count",
+            "operator": ">=",
+            "target": 10000,
+            "unit": "volumes",
+        },
+        "evidence_required": ["BUILDING_PLAN"],
+        "suggested_action": "Procure additional technical reference titles to meet the 10,000 volume threshold.",
+    },
+    {
+        "rule_code": "INFRA-FACULTY-STUDENT-RATIO",
+        "category": "Faculty & Academic Cadre",
+        "title": "Maximum Faculty-to-Student Ratio",
+        "description": "Full-time faculty to student cadre ratio must not exceed AICTE prescribed ratio. Example thresholds for demonstration; set by AICTE norms.",
+        "handbook_reference": "Section 5.1.1",
+        "version": "v2026.1",
+        "is_mandatory": True,
+        "rule_type": "INFRASTRUCTURE",
+        "severity": "BLOCKER",
+        "applies_to_categories": ["EOA", "INTAKE_CHANGE"],
+        "definition": {
+            "evaluator": "INFRASTRUCTURE",
+            "metric": "faculty_student_ratio",
+            "operator": "<=",
+            "target": 20.0,
+            "unit": ":1",
+        },
+        "evidence_required": ["AFFIDAVIT"],
+        "suggested_action": "Recruit qualified full-time faculty to maintain an FSR of 1:20 or better.",
+    },
+    {
+        "rule_code": "INFRA-COMPUTER-STUDENT-RATIO",
+        "category": "Computing & Digital Resources",
+        "title": "Minimum Computer-to-Student Ratio",
+        "description": "Adequate terminals available for student instructional use. Example thresholds for demonstration; set by AICTE norms.",
+        "handbook_reference": "Section 4.3.1",
+        "version": "v2026.1",
+        "is_mandatory": True,
+        "rule_type": "INFRASTRUCTURE",
+        "severity": "BLOCKER",
+        "applies_to_categories": ["EOA", "INTAKE_CHANGE"],
+        "definition": {
+            "evaluator": "INFRASTRUCTURE",
+            "metric": "computer_student_ratio",
+            "operator": ">=",
+            "target": 0.20,
+            "unit": "terminals/student",
+        },
+        "evidence_required": ["BUILDING_PLAN"],
+        "suggested_action": "Procure and commission computing workstations to achieve at least 1 computer per 5 students (ratio >= 0.20).",
+    },
+    {
+        "rule_code": "INFRA-BARRIER-FREE",
+        "category": "Student Welfare & Accessibility",
+        "title": "Barrier-Free Built Environment for Divyangjan",
+        "description": "Ramps, lifts, disabled-friendly toilets, and Braille signage across campus. Example thresholds for demonstration; set by AICTE norms.",
+        "handbook_reference": "Section 4.5.1",
+        "version": "v2026.1",
+        "is_mandatory": False,
+        "rule_type": "INFRASTRUCTURE",
+        "severity": "WARNING",
+        "applies_to_categories": ["EOA", "NEW_INSTITUTE"],
+        "definition": {
+            "evaluator": "INFRASTRUCTURE",
+            "metric": "barrier_free_facilities",
+            "operator": "==",
+            "target": True,
+        },
+        "evidence_required": ["BARRIER_FREE"],
+        "suggested_action": "Complete barrier-free disability access facilities and certification.",
+    },
+    {
+        "rule_code": "INFRA-FIRE-SAFETY",
+        "category": "Campus Safety & Disaster Preparedness",
+        "title": "Fire Safety Equipment Installation",
+        "description": "Functional fire hydrant, sprinkler system, and portable extinguishers certified by Fire Authority. Example thresholds for demonstration; set by AICTE norms.",
+        "handbook_reference": "Section 2.5.1",
+        "version": "v2026.1",
+        "is_mandatory": False,
+        "rule_type": "INFRASTRUCTURE",
+        "severity": "WARNING",
+        "applies_to_categories": ["EOA", "NEW_INSTITUTE"],
+        "definition": {
+            "evaluator": "INFRASTRUCTURE",
+            "metric": "fire_safety_installed",
+            "operator": "==",
+            "target": True,
+        },
+        "evidence_required": ["FIRE_NOC"],
+        "suggested_action": "Install mandated fire safety and hydrant systems certified by the Fire Department.",
+    },
     {
         "rule_code": "APH-2026-CH2-R21",
         "category": "Institutional Governance",
@@ -464,6 +676,21 @@ def seed_published_rules_if_needed(db: Session):
 
     db.commit()
 
+    # Update or create active RuleSet
+    all_rules_snapshot = [
+        {
+            "code": r.code,
+            "title": r.title,
+            "severity": r.severity,
+            "mandatory": r.mandatory,
+            "definition": r.definition,
+            "status": "PUBLISHED",
+            "is_active": True,
+            "rule_type": r.rule_type,
+            "applies_to_categories": r.applies_to_categories or ["EOA"],
+        }
+        for r in seeded_rules
+    ]
     active_ruleset = db.query(RuleSet).filter(RuleSet.status == "ACTIVE").first()
     if not active_ruleset:
         ruleset = RuleSet(
@@ -472,19 +699,15 @@ def seed_published_rules_if_needed(db: Session):
             status="ACTIVE",
             snapshot={
                 "published_at": datetime.now(timezone.utc).isoformat(),
-                "rules": [
-                    {
-                        "code": r.code,
-                        "title": r.title,
-                        "severity": r.severity,
-                        "mandatory": r.mandatory,
-                        "definition": r.definition,
-                    }
-                    for r in seeded_rules
-                ],
+                "rules": all_rules_snapshot,
             },
             published_at=datetime.now(timezone.utc),
         )
         db.add(ruleset)
-        db.commit()
+    else:
+        active_ruleset.snapshot = {
+            "published_at": datetime.now(timezone.utc).isoformat(),
+            "rules": all_rules_snapshot,
+        }
+    db.commit()
 

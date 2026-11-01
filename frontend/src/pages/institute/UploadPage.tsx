@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  FileUp,
   UploadCloud,
   File,
   Trash2,
@@ -16,7 +15,6 @@ import {
   X,
   ShieldCheck,
   ShieldAlert,
-  Sparkles,
   XCircle,
   RefreshCw,
 } from 'lucide-react';
@@ -343,7 +341,7 @@ export const UploadPage: React.FC = () => {
       setDocuments(updatedDocs);
       const freshDoc = updatedDocs.find((d) => d.id === drawerDoc.id);
       if (freshDoc) setDrawerDoc(freshDoc);
-      setVerifyNotice('Statutory verification completed successfully.');
+      setVerifyNotice('Verification completed successfully.');
     } catch (err: any) {
       console.error('Verification failed:', err);
       setVerifyNotice('Verification encountered an issue or requires manual scrutiny.');
@@ -363,16 +361,13 @@ export const UploadPage: React.FC = () => {
   return (
     <div className="space-y-6 animate-fade-in pb-12">
       {/* Page Title Card */}
-      <div className="bg-white rounded-[12px] p-6 shadow-[0_6px_18px_rgba(0,0,0,0.18)] border border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="bg-white rounded-xl p-6 border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2.5">
-            <FileUp size={22} className="text-[#0B3C9D]" />
-            <h2 className="text-xl font-bold text-[#0B3C9D] tracking-tight">
-              Institutional Document Repository & Regulatory Checklists
-            </h2>
-          </div>
-          <p className="text-xs text-slate-500 mt-1">
-            Dynamic regulatory checklist requirements, OCR verification, and readiness tracking with SHA-256 verification.
+          <h1 className="text-xl font-bold text-slate-900 tracking-tight">
+            Documents
+          </h1>
+          <p className="text-sm text-slate-600 mt-1">
+            Upload mandatory documents and verify checklist compliance.
           </p>
         </div>
 
@@ -394,7 +389,7 @@ export const UploadPage: React.FC = () => {
 
       {/* Application Readiness Card */}
       {readinessData && (
-        <div className="bg-white rounded-[12px] p-6 shadow-[0_6px_18px_rgba(0,0,0,0.18)] border border-slate-100">
+        <div className="bg-white rounded-xl p-6 border border-slate-200 shadow-sm">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-4 border-b border-slate-100">
             <div className="flex items-center gap-2.5">
               <ShieldCheck size={20} className="text-[#0B3C9D]" />
@@ -405,7 +400,7 @@ export const UploadPage: React.FC = () => {
                     {readinessData.ruleset_name} ({readinessData.ruleset_version})
                   </span>
                 </h3>
-                <p className="text-xs text-slate-500 mt-0.5">
+                <p className="text-xs text-slate-600 mt-0.5">
                   Verified against the official Approval Process Handbook regulatory checklist.
                 </p>
               </div>
@@ -437,7 +432,7 @@ export const UploadPage: React.FC = () => {
             <div className="md:col-span-3 space-y-3">
               <h4 className="text-xs font-bold text-[#0F2A5C] uppercase tracking-wider flex items-center justify-between">
                 <span>Regulatory Items Status & Deficiencies</span>
-                <span className="text-[11px] text-slate-400 font-normal">
+                <span className="text-[11px] text-slate-600 font-normal">
                   {readinessData.missing_items.length} missing / pending
                 </span>
               </h4>
@@ -497,7 +492,7 @@ export const UploadPage: React.FC = () => {
       )}
 
       {/* Mandatory Checklist Status Strip */}
-      <div className="bg-white rounded-[12px] p-6 shadow-[0_6px_18px_rgba(0,0,0,0.18)] border border-slate-100">
+      <div className="bg-white rounded-lg p-6 border border-slate-200 shadow-sm">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-4 border-b border-slate-100">
           <div className="flex items-center gap-2">
             <CheckSquare size={18} className="text-[#F58220]" />
@@ -556,7 +551,7 @@ export const UploadPage: React.FC = () => {
       </div>
 
       {/* Drag-and-Drop Zone Card */}
-      <div className="bg-white rounded-[12px] p-6 shadow-[0_6px_18px_rgba(0,0,0,0.18)] border border-slate-100">
+      <div className="bg-white rounded-lg p-6 border border-slate-200 shadow-sm">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
           <label className="text-xs font-bold text-[#0F2A5C] flex items-center gap-1.5">
             Document Type to Attach:
@@ -639,7 +634,7 @@ export const UploadPage: React.FC = () => {
       </div>
 
       {/* List of Uploaded Documents */}
-      <div className="bg-white rounded-[12px] p-6 shadow-[0_6px_18px_rgba(0,0,0,0.18)] border border-slate-100">
+      <div className="bg-white rounded-lg p-6 border border-slate-200 shadow-sm">
         <div className="flex items-center justify-between pb-4 border-b border-slate-100 flex-wrap gap-2">
           <h3 className="text-base font-bold text-[#0B3C9D] tracking-tight">
             Uploaded Documents Archive ({documents.length})
@@ -648,7 +643,7 @@ export const UploadPage: React.FC = () => {
             <button
               onClick={handleCleanupPlaceholders}
               disabled={isCleaning}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-50 text-[#C62828] hover:bg-red-100 rounded-[8px] text-xs font-semibold border border-red-200 transition-colors disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-50 text-[#C62828] hover:bg-red-100 rounded-[8px] text-xs font-semibold border border-red-200 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
               title="Delete 46-byte demo placeholder documents"
             >
               <Trash2 size={13} />
@@ -657,32 +652,28 @@ export const UploadPage: React.FC = () => {
           )}
         </div>
 
-        <div className="overflow-x-auto mt-4">
-          <table className="w-full text-left border-collapse text-xs">
+        <div className="table-container mt-4">
+          <table className="aicte-table">
             <thead>
-              <tr className="bg-[#E3F0FF] text-[#0B3C9D] uppercase text-[11px] font-bold tracking-wider">
-                <th className="py-3 px-4 rounded-l-md">File Details</th>
-                <th className="py-3 px-4">Doc Type</th>
-                <th className="py-3 px-4">MIME Type</th>
-                <th className="py-3 px-4">Size</th>
-                <th className="py-3 px-4">Uploaded On</th>
-                <th className="py-3 px-4">SHA-256 Digest</th>
-                <th className="py-3 px-4">OCR Status</th>
-                <th className="py-3 px-4">Verification</th>
-                <th className="py-3 px-4 text-center rounded-r-md">Actions</th>
+              <tr className="bg-slate-50 text-slate-600 font-semibold border-b border-slate-200 text-xs">
+                <th className="py-2.5 px-3 w-[28%]">File & document type</th>
+                <th className="py-2.5 px-3 w-[18%]">Size & date</th>
+                <th className="py-2.5 px-3 w-[18%]">Checksum</th>
+                <th className="py-2.5 px-3 w-[22%]">Status & verification</th>
+                <th className="py-2.5 px-3 w-[14%] text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
               {isLoading ? (
                 <tr>
-                  <td colSpan={9} className="py-12 text-center text-slate-400">
+                  <td colSpan={5} className="py-12 text-center text-slate-600">
                     <Loader2 size={24} className="animate-spin mx-auto mb-2 text-[#F58220]" />
                     Loading archive records...
                   </td>
                 </tr>
               ) : documents.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="py-10 text-center text-slate-400">
+                  <td colSpan={5} className="py-10 text-center text-slate-600">
                     No documents uploaded yet. Use the drop zone above to attach institutional proofs.
                   </td>
                 </tr>
@@ -708,38 +699,39 @@ export const UploadPage: React.FC = () => {
 
                   return (
                     <tr key={doc.id} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="py-3.5 px-4 font-bold text-[#0F2A5C] flex items-center gap-2.5">
-                        <File size={16} className="text-[#0B3C9D] shrink-0" />
-                        <span className="truncate max-w-[200px]">{doc.original_filename}</span>
+                      <td className="py-2.5 px-3">
+                        <div className="font-medium text-slate-900 flex items-center gap-2">
+                          <File size={14} className="text-[#0B3C9D] shrink-0" />
+                          <span className="truncate" title={doc.original_filename}>{doc.original_filename}</span>
+                        </div>
+                        <div className="text-[11px] text-slate-600 mt-0.5 flex items-center gap-1.5">
+                          <span className="font-mono font-semibold text-[#0B3C9D]">{doc.document_type_code || '—'}</span>
+                          <span>•</span>
+                          <span className="font-mono text-slate-500">{doc.mime_type}</span>
+                        </div>
                       </td>
-                      <td className="py-3.5 px-4 font-mono font-semibold text-[#0B3C9D]">
-                        {doc.document_type_code || '—'}
+                      <td className="py-2.5 px-3 text-xs">
+                        <div className="text-slate-800 font-medium">{formatBytes(doc.file_size)}</div>
+                        <div className="text-[11px] text-slate-500 mt-0.5">{new Date(doc.created_at).toLocaleDateString('en-GB')}</div>
                       </td>
-                      <td className="py-3.5 px-4 text-slate-500 font-mono text-[11px]">
-                        {doc.mime_type}
-                      </td>
-                      <td className="py-3.5 px-4 whitespace-nowrap">{formatBytes(doc.file_size)}</td>
-                      <td className="py-3.5 px-4 whitespace-nowrap text-slate-500">
-                        {new Date(doc.created_at).toLocaleDateString('en-GB')}
-                      </td>
-                      <td className="py-3.5 px-4 font-mono text-[11px] text-slate-400">
+                      <td className="py-2.5 px-3 font-mono text-[11px] text-slate-600">
                         {doc.sha256_hash.substring(0, 10)}...{doc.sha256_hash.substring(58)}
                       </td>
-                      <td className="py-3.5 px-4">
-                        <StatusPill status={ocrPillStatus} />
+                      <td className="py-2.5 px-3">
+                        <div className="flex flex-col gap-1 items-start">
+                          <StatusPill status={ocrPillStatus} />
+                          <StatusPill status={formatVerificationStatus(doc.verification_status)} />
+                        </div>
                       </td>
-                      <td className="py-3.5 px-4">
-                        <StatusPill status={formatVerificationStatus(doc.verification_status)} />
-                      </td>
-                      <td className="py-3.5 px-4">
-                        <div className="flex items-center justify-center gap-1.5">
+                      <td className="py-2.5 px-3 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
                           {/* Retry Button if document is not Completed */}
                           {isNotCompleted && (
                             <button
                               onClick={() => handleRetry(doc.id)}
                               disabled={retryingDocId === doc.id || doc.ocr_status === 'PROCESSING'}
                               title="Retry Processing (OCR, Extraction, Verification)"
-                              className="p-1.5 bg-amber-50 text-[#F58220] hover:bg-amber-100 rounded-[6px] transition-colors disabled:opacity-50"
+                              className="p-1.5 bg-amber-50 text-[#F58220] hover:bg-amber-100 rounded-[6px] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                             >
                               <RefreshCw size={13} className={retryingDocId === doc.id ? 'animate-spin' : ''} />
                             </button>
@@ -792,12 +784,12 @@ export const UploadPage: React.FC = () => {
         width="max-w-2xl"
       >
         {isLoadingExtraction ? (
-          <div className="py-16 text-center text-slate-400">
+          <div className="py-16 text-center text-slate-600">
             <Loader2 size={28} className="animate-spin mx-auto mb-2 text-[#F58220]" />
             Loading extracted fields & neural classification...
           </div>
         ) : !extractionData ? (
-          <div className="py-12 text-center text-slate-400 text-xs">
+          <div className="py-12 text-center text-slate-600 text-xs">
             No extracted data available for this document yet.
           </div>
         ) : (
@@ -816,12 +808,12 @@ export const UploadPage: React.FC = () => {
               </div>
             )}
 
-            {/* Statutory Verification Section */}
-            <div className="p-4 bg-white border border-slate-200 rounded-[10px] shadow-xs space-y-3">
+            {/* Verification Section */}
+            <div className="p-4 bg-white border border-slate-200 rounded-lg shadow-xs space-y-3">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100">
                 <div className="flex items-center gap-2 flex-wrap">
                   <ShieldCheck size={16} className="text-[#0B3C9D]" />
-                  <span className="font-bold text-[#0F2A5C] text-xs">Statutory Verification</span>
+                  <span className="font-semibold text-slate-800 text-xs">Verification checks</span>
                   <StatusPill
                     status={formatVerificationStatus(extractionData.verification?.status || drawerDoc?.verification_status)}
                   />
@@ -835,7 +827,7 @@ export const UploadPage: React.FC = () => {
                 <button
                   onClick={handleVerifyNow}
                   disabled={isVerifying}
-                  className="px-3 py-1.5 bg-[#0B3C9D] hover:bg-[#092E7A] text-white rounded-[6px] text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-colors disabled:opacity-50 select-none self-start sm:self-auto cursor-pointer"
+                  className="px-3 py-1.5 bg-[#0B3C9D] hover:bg-[#092E7A] text-white rounded-[6px] text-xs font-semibold flex items-center gap-1.5 shadow-sm transition-colors disabled:opacity-60 disabled:cursor-not-allowed select-none self-start sm:self-auto cursor-pointer"
                 >
                   {isVerifying ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
                   Verify now
@@ -845,13 +837,13 @@ export const UploadPage: React.FC = () => {
               {/* Source & Checked-At Meta */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] bg-slate-50/70 p-2.5 rounded-lg border border-slate-100">
                 <div>
-                  <span className="text-slate-400 block">Issuing Authority Source:</span>
+                  <span className="text-slate-600 block">Issuing Authority Source:</span>
                   <span className="font-semibold text-slate-800">
                     {extractionData.verification?.source_name || drawerDoc?.verification_source || 'Authority Registry / Digital Signature'}
                   </span>
                 </div>
                 <div>
-                  <span className="text-slate-400 block">Checked At:</span>
+                  <span className="text-slate-600 block">Checked At:</span>
                   <span className="font-semibold text-slate-800">
                     {extractionData.verification?.checked_at
                       ? new Date(extractionData.verification.checked_at).toLocaleString()
@@ -873,13 +865,13 @@ export const UploadPage: React.FC = () => {
                   Field Comparison (Submitted vs Official)
                 </span>
                 {extractionData.verification?.all_comparisons && extractionData.verification.all_comparisons.length > 0 ? (
-                  <div className="overflow-x-auto border border-slate-200 rounded-lg">
-                    <table className="w-full text-left text-xs border-collapse">
+                  <div className="table-container border border-slate-200 rounded-lg">
+                    <table className="aicte-table">
                       <thead>
-                        <tr className="bg-[#E3F0FF] text-[#0B3C9D] text-[10px] font-bold uppercase tracking-wider">
+                        <tr className="bg-slate-50 text-slate-600 font-semibold border-b border-slate-200 text-xs">
                           <th className="py-2 px-3">Field</th>
-                          <th className="py-2 px-3">Submitted Value</th>
-                          <th className="py-2 px-3">Official Value</th>
+                          <th className="py-2 px-3">Submitted value</th>
+                          <th className="py-2 px-3">Official value</th>
                           <th className="py-2 px-3 text-center">Result</th>
                         </tr>
                       </thead>
@@ -912,7 +904,7 @@ export const UploadPage: React.FC = () => {
                     </table>
                   </div>
                 ) : (
-                  <div className="text-[11px] text-slate-400 italic p-3 bg-slate-50 rounded border border-slate-100 text-center">
+                  <div className="text-[11px] text-slate-600 italic p-3 bg-slate-50 rounded border border-slate-100 text-center">
                     No field comparisons recorded yet. Click &quot;Verify now&quot; to cross-reference against official registers.
                   </div>
                 )}
@@ -953,7 +945,7 @@ export const UploadPage: React.FC = () => {
                             <span className="font-mono text-[11px] font-bold text-[#0B3C9D]">
                               {flag.code}
                             </span>
-                            <span className="text-[10px] text-slate-400 font-medium">
+                            <span className="text-[10px] text-slate-600 font-medium">
                               ({flag.detector})
                             </span>
                           </div>
@@ -1043,13 +1035,12 @@ export const UploadPage: React.FC = () => {
 
             {/* Classification Card */}
             {extractionData.classification && (
-              <div className="p-4 bg-slate-50 border border-slate-200 rounded-[10px] space-y-2">
+              <div className="p-4 bg-slate-50 border border-slate-200 rounded-lg space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="font-bold text-[#0F2A5C] flex items-center gap-1.5">
-                    <Sparkles size={14} className="text-[#F58220]" />
-                    Document Classification Prediction
+                  <span className="font-semibold text-slate-800 text-xs">
+                    Document classification prediction
                   </span>
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#E2F6E6] text-[#1E7036]">
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[#E2F6E6] text-[#1E7036]">
                     Score: {Math.round(extractionData.classification.score * 100)}%
                   </span>
                 </div>
@@ -1066,25 +1057,25 @@ export const UploadPage: React.FC = () => {
             )}
 
             {/* Validity Strip */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 p-3.5 bg-slate-50 rounded-[8px] border border-slate-100 text-[11px]">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 p-3.5 bg-slate-50 rounded-lg border border-slate-100 text-[11px]">
               <div>
-                <span className="text-slate-400 block">Expiry Date:</span>
+                <span className="text-slate-600 block">Expiry Date:</span>
                 <span className="font-bold text-[#0F2A5C]">{extractionData.expiry_date || 'N/A'}</span>
               </div>
               <div>
-                <span className="text-slate-400 block">Days Left:</span>
+                <span className="text-slate-600 block">Days Left:</span>
                 <span className="font-bold text-[#0F2A5C]">
                   {extractionData.days_remaining !== undefined ? `${extractionData.days_remaining}d` : 'N/A'}
                 </span>
               </div>
               <div>
-                <span className="text-slate-400 block">Status:</span>
+                <span className="text-slate-600 block">Status:</span>
                 <span className="font-bold text-[#0F2A5C]">
                   {extractionData.is_expired ? 'Expired' : 'Valid'}
                 </span>
               </div>
               <div>
-                <span className="text-slate-400 block">OCR Engine:</span>
+                <span className="text-slate-600 block">OCR:</span>
                 <span className="font-bold text-[#0B3C9D]">{extractionData.ocr_status}</span>
               </div>
             </div>
@@ -1096,7 +1087,7 @@ export const UploadPage: React.FC = () => {
               </h4>
 
               {extractionData.fields.length === 0 ? (
-                <div className="p-6 text-center text-slate-400 border border-dashed rounded-lg">
+                <div className="p-6 text-center text-slate-600 border border-dashed rounded-lg">
                   No structured fields detected in this document.
                 </div>
               ) : (
@@ -1115,7 +1106,7 @@ export const UploadPage: React.FC = () => {
                             <span className="font-mono text-[11px] text-[#0B3C9D] font-bold block">
                               {field.key}
                             </span>
-                            <span className="text-[10px] text-slate-400">
+                            <span className="text-[10px] text-slate-600">
                               Page {field.page_no} • {field.source} • Conf: {Math.round(field.confidence * 100)}%
                             </span>
                           </div>
@@ -1159,7 +1150,7 @@ export const UploadPage: React.FC = () => {
                               </button>
                               <button
                                 onClick={() => setEditingFieldKey(null)}
-                                className="p-1 text-slate-400 hover:text-slate-600 rounded"
+                                className="p-1 text-slate-600 hover:text-slate-600 rounded"
                               >
                                 <X size={14} />
                               </button>

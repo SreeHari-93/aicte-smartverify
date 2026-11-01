@@ -28,6 +28,8 @@ class CourseItem(BaseModel):
     name: str
     level: str
     intake: int
+    accreditation_status: Optional[str] = 'NBA accredited'
+    approved_year: Optional[str] = '2026'
 
     class Config:
         from_attributes = True

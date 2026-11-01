@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Files,
   Plus,
   Edit,
   Trash2,
@@ -17,6 +16,8 @@ import {
 } from '../../api/admin';
 import { StatusPill } from '../../components/StatusPill';
 import { Modal } from '../../components/Modal';
+import { DataTable, ColumnDef } from '../../components/DataTable';
+import { ActionMenu } from '../../components/ActionMenu';
 
 const AUTHORITY_ADAPTERS = [
   'MANUAL',
@@ -30,7 +31,11 @@ const AUTHORITY_ADAPTERS = [
   'QR',
 ];
 
-export const AdminDocumentTypesPage: React.FC = () => {
+interface AdminDocumentTypesPageProps {
+  readOnly?: boolean;
+}
+
+export const AdminDocumentTypesPage: React.FC<AdminDocumentTypesPageProps> = ({ readOnly = false }) => {
   const [docTypes, setDocTypes] = useState<DocumentTypeOut[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -252,29 +257,27 @@ export const AdminDocumentTypesPage: React.FC = () => {
       )}
 
       {/* Header Card */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-6 sm:p-8 shadow-sm">
+      <div className="bg-white rounded-xl border border-slate-200 p-6 sm:p-8 shadow-sm">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-100">
           <div>
-            <div className="inline-flex items-center gap-2 bg-[#E3F0FF] text-[#0B3C9D] text-xs font-semibold px-2.5 py-1 rounded-md mb-2">
-              <Files size={14} />
-              <span>Document Type Taxonomy & Extraction Schema</span>
-            </div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-[#0F2A5C] tracking-tight">
-              Document Types Catalog
+            <h1 className="text-xl font-bold text-slate-900 tracking-tight">
+              Document types
             </h1>
-            <p className="text-sm text-slate-500 mt-1">
-              Define accepted document types, classification keywords for OCR detection, and statutory verification adapters.
+            <p className="text-sm text-slate-600 mt-1">
+              Define accepted document types, classification keywords for OCR detection, and verification adapters.
             </p>
           </div>
 
           <div className="flex items-center gap-3">
-            <button
-              onClick={openCreateModal}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#0B3C9D] text-white text-sm font-bold hover:bg-[#0F2A5C] shadow-sm transition-all"
-            >
-              <Plus size={18} />
-              <span>Register Document Type</span>
-            </button>
+            {!readOnly && (
+              <button
+                onClick={openCreateModal}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#0B3C9D] text-white text-sm font-bold hover:bg-[#0F2A5C] shadow-sm transition-all"
+              >
+                <Plus size={18} />
+                <span>Register Document Type</span>
+              </button>
+            )}
             <button
               onClick={loadData}
               className="p-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
@@ -287,17 +290,17 @@ export const AdminDocumentTypesPage: React.FC = () => {
         {/* Stats */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6">
           <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
-            <span className="text-xs uppercase font-bold text-slate-500">Registered Types</span>
+            <span className="text-xs font-semibold text-slate-600">Registered Types</span>
             <p className="text-2xl font-bold text-[#0F2A5C] mt-1">{docTypes.length}</p>
           </div>
           <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
-            <span className="text-xs uppercase font-bold text-slate-500">Statutory Verified Types</span>
+            <span className="text-xs font-semibold text-slate-600">Statutory Verified Types</span>
             <p className="text-2xl font-bold text-emerald-700 mt-1">
               {docTypes.filter((d) => d.statutory_verification_applies || d.verification_method !== 'MANUAL').length}
             </p>
           </div>
           <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
-            <span className="text-xs uppercase font-bold text-slate-500">Active Documents</span>
+            <span className="text-xs font-semibold text-slate-600">Active Documents</span>
             <p className="text-2xl font-bold text-[#0B3C9D] mt-1">
               {docTypes.filter((d) => d.is_active).length} Active
             </p>
@@ -308,112 +311,141 @@ export const AdminDocumentTypesPage: React.FC = () => {
       {/* Filter / Search Bar */}
       <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm flex items-center justify-between">
         <div className="relative w-full max-w-md">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
           <input
             type="text"
             placeholder="Search code, name, or authority..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B3C9D]"
+            className="w-full pl-9 pr-4 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B3C9D] placeholder:text-slate-500"
           />
         </div>
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-        <div className="overflow-x-auto w-full">
-          <table className="w-full text-left text-sm text-slate-700">
-            <thead className="bg-slate-50 text-slate-600 font-semibold border-b border-slate-200 uppercase text-xs tracking-wider">
-              <tr>
-                <th className="py-4 px-5">Type Code</th>
-                <th className="py-4 px-5">Display Name</th>
-                <th className="py-4 px-5">Issuing Authority</th>
-                <th className="py-4 px-5">Statutory Adapter</th>
-                <th className="py-4 px-5">Validity</th>
-                <th className="py-4 px-5">Classification Keywords</th>
-                <th className="py-4 px-5">Status</th>
-                <th className="py-4 px-5 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {filteredDocTypes.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="py-12 text-center text-slate-400">
-                    No document types found.
-                  </td>
-                </tr>
+      {(() => {
+        const columns: ColumnDef<DocumentTypeOut>[] = [
+          {
+            key: 'code',
+            header: 'Type code',
+            width: '14%',
+            align: 'left',
+            render: (dt) => (
+              <span className="font-mono font-semibold text-[#0B3C9D] text-xs">
+                {dt.code}
+              </span>
+            ),
+          },
+          {
+            key: 'name',
+            header: 'Display name',
+            width: '24%',
+            align: 'left',
+            render: (dt) => (
+              <div>
+                <span className="font-medium text-slate-900 line-clamp-2 block" title={dt.name}>
+                  {dt.name}
+                </span>
+                <span className="text-[11px] text-slate-600 block line-clamp-1">
+                  {dt.description || ''}
+                </span>
+              </div>
+            ),
+          },
+          {
+            key: 'authority',
+            header: 'Issuing authority',
+            width: '20%',
+            align: 'left',
+            render: (dt) => (
+              <span className="text-xs text-slate-700 line-clamp-2 block" title={dt.issuing_authority || 'Authorized Regulatory Body'}>
+                {dt.issuing_authority || 'Authorized Regulatory Body'}
+              </span>
+            ),
+          },
+          {
+            key: 'adapter',
+            header: 'Adapter',
+            width: '14%',
+            align: 'left',
+            render: (dt) =>
+              dt.statutory_verification_applies || dt.verification_method !== 'MANUAL' ? (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                  <ShieldCheck size={13} className="text-emerald-600" />
+                  <span>{dt.authority_adapter || dt.verification_method}</span>
+                </span>
               ) : (
-                filteredDocTypes.map((dt) => (
-                  <tr key={dt.code} className="hover:bg-slate-50/70 transition-colors">
-                    <td className="py-4 px-5 font-mono font-bold text-[#0B3C9D] whitespace-nowrap">
-                      {dt.code}
-                    </td>
-                    <td className="py-4 px-5 font-semibold text-[#0F2A5C] max-w-xs truncate">
-                      {dt.name}
-                    </td>
-                    <td className="py-4 px-5 text-xs text-slate-600 max-w-xs truncate">
-                      {dt.issuing_authority || 'Authorized Regulatory Body'}
-                    </td>
-                    <td className="py-4 px-5 whitespace-nowrap">
-                      {dt.statutory_verification_applies || dt.verification_method !== 'MANUAL' ? (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
-                          <ShieldCheck size={13} className="text-emerald-600" />
-                          <span>{dt.authority_adapter || dt.verification_method}</span>
-                        </span>
-                      ) : (
-                        <span className="text-xs text-slate-400">Manual Scrutiny</span>
-                      )}
-                    </td>
-                    <td className="py-4 px-5 whitespace-nowrap text-xs text-slate-600">
-                      {dt.has_expiry ? `${dt.default_validity_months || 12} Months` : 'Lifetime'}
-                    </td>
-                    <td className="py-4 px-5 max-w-xs">
-                      <div className="flex flex-wrap gap-1.5">
-                        {(dt.keywords || []).slice(0, 3).map((kw) => (
-                          <span
-                            key={kw}
-                            className="text-xs bg-slate-100 text-slate-700 px-2 py-0.5 rounded font-mono font-medium"
-                          >
-                            {kw}
-                          </span>
-                        ))}
-                        {(dt.keywords || []).length > 3 && (
-                          <span className="text-xs text-slate-400 font-medium">
-                            +{dt.keywords!.length - 3}
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="py-4 px-5 whitespace-nowrap">
-                      <StatusPill status={dt.is_active ? 'ACTIVE' : 'ARCHIVED'} />
-                    </td>
-                    <td className="py-4 px-5 text-right whitespace-nowrap">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <button
-                          onClick={() => openEditModal(dt)}
-                          className="p-1.5 text-slate-600 hover:bg-slate-100 rounded-md"
-                          title="Edit Document Type"
-                        >
-                          <Edit size={15} />
-                        </button>
-                        {dt.is_active && (
-                          <button
-                            onClick={() => handleDelete(dt.code)}
-                            className="p-1.5 text-red-600 hover:bg-red-50 rounded-md"
-                            title="Deactivate Document Type"
-                          >
-                            <Trash2 size={15} />
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+                <span className="text-xs text-slate-600 font-medium">Manual Scrutiny</span>
+              ),
+          },
+          {
+            key: 'validity',
+            header: 'Validity',
+            width: '8%',
+            align: 'right',
+            render: (dt) => (
+              <span className="text-xs text-slate-800 font-medium">
+                {dt.has_expiry ? `${dt.default_validity_months || 12} mo` : 'Lifetime'}
+              </span>
+            ),
+          },
+          {
+            key: 'status',
+            header: 'Status',
+            width: '8%',
+            align: 'left',
+            render: (dt) => <StatusPill status={dt.is_active ? 'ACTIVE' : 'ARCHIVED'} />,
+          },
+          {
+            key: 'actions',
+            header: 'Actions',
+            width: '12%',
+            align: 'right',
+            render: (dt) => {
+              if (readOnly) {
+                return <span className="text-xs text-slate-600 font-medium">View-only</span>;
+              }
+              return (
+                <div className="flex justify-end">
+                  <ActionMenu
+                    primaryAction={{
+                      label: 'Edit',
+                      onClick: () => openEditModal(dt),
+                      icon: <Edit size={12} />,
+                      variant: 'secondary',
+                    }}
+                    menuItems={
+                      dt.is_active
+                        ? [
+                            {
+                              label: 'Deactivate',
+                              onClick: () => handleDelete(dt.code),
+                              icon: <Trash2 size={12} />,
+                              danger: true,
+                            },
+                          ]
+                        : []
+                    }
+                  />
+                </div>
+              );
+            },
+          },
+        ];
+
+        return (
+          <DataTable
+            columns={columns}
+            data={filteredDocTypes}
+            keyExtractor={(dt) => dt.code}
+            isLoading={isLoading}
+            emptyMessage="No document types found."
+            emptySubtitle="Try adjusting your search criteria."
+            onClearFilters={searchQuery ? () => setSearchQuery('') : undefined}
+            isLong={filteredDocTypes.length > 12}
+          />
+        );
+      })()}
 
       {/* ========================================================================= */}
       {/* CREATE / EDIT DOCUMENT TYPE MODAL                                         */}
@@ -610,7 +642,7 @@ export const AdminDocumentTypesPage: React.FC = () => {
             {/* Keyword chips in wrapped flex row with readable spacing */}
             <div className="flex flex-wrap gap-2 pt-1">
               {formData.keywords.length === 0 ? (
-                <span className="text-xs text-slate-400 italic">No keywords added yet.</span>
+                <span className="text-xs text-slate-600 italic">No keywords added yet.</span>
               ) : (
                 formData.keywords.map((kw) => (
                   <span
@@ -621,7 +653,7 @@ export const AdminDocumentTypesPage: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => handleRemoveKeyword(kw)}
-                      className="text-slate-400 hover:text-red-600 transition-colors"
+                      className="text-slate-600 hover:text-red-600 transition-colors"
                       title={`Remove ${kw}`}
                     >
                       <X size={13} />
@@ -687,7 +719,7 @@ export const AdminDocumentTypesPage: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => handleRemoveField(idx)}
-                    className="p-1 text-slate-400 hover:text-red-600 transition-colors"
+                    className="p-1 text-slate-600 hover:text-red-600 transition-colors"
                   >
                     <Trash2 size={14} />
                   </button>

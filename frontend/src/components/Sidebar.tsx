@@ -2,12 +2,12 @@ import React from 'react';
 import { NavLink } from 'react-router-dom';
 import {
   Home,
-  Hourglass,
   FileText,
-  Gavel,
+  FileSignature,
+  Hourglass,
   FileUp,
-  Bot,
   MessageSquare,
+  Bell,
   BarChart3,
 } from 'lucide-react';
 
@@ -16,15 +16,17 @@ interface SidebarProps {
   onClose?: () => void;
 }
 
+// Exact Institute Sidebar Order for PS 26262:
+// Dashboard, My Applications, Undertakings, Document Validity, Documents, Complaints, Notifications, Reports.
 export const NAV_ITEMS = [
   { label: 'Dashboard', path: '/institute/dashboard', icon: Home },
-  { label: 'Certificate Expiry', path: '/institute/certificates', icon: Hourglass },
-  { label: 'Application', path: '/institute/applications', icon: FileText },
-  { label: 'Rules', path: '/institute/rules', icon: Gavel },
-  { label: 'Upload', path: '/institute/upload', icon: FileUp },
-  { label: 'Validation', path: '/institute/validation', icon: Bot },
-  { label: 'Complaint', path: '/institute/complaints', icon: MessageSquare },
-  { label: 'Report', path: '/institute/reports', icon: BarChart3 },
+  { label: 'Applications', path: '/institute/applications', icon: FileText },
+  { label: 'Undertakings', path: '/institute/undertakings', icon: FileSignature },
+  { label: 'Document validity', path: '/institute/validity', icon: Hourglass },
+  { label: 'Documents', path: '/institute/upload', icon: FileUp },
+  { label: 'Complaints', path: '/institute/complaints', icon: MessageSquare },
+  { label: 'Notifications', path: '/institute/notifications', icon: Bell },
+  { label: 'Reports', path: '/institute/reports', icon: BarChart3 },
 ];
 
 export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose }) => {
@@ -45,7 +47,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose }) => 
           isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         }`}
       >
-        <nav className="flex flex-col gap-1.5" role="navigation" aria-label="Institute Portal Navigation">
+        <nav className="flex flex-col gap-1.5 overflow-y-auto pr-1" role="navigation" aria-label="Institute Portal Navigation">
+          <div className="px-3 pb-2 mb-1 border-b border-[#EFE3CF]/80">
+            <span className="text-xs font-semibold text-slate-600">
+              Menu
+            </span>
+          </div>
           {NAV_ITEMS.map((item) => {
             const Icon = item.icon;
             return (
@@ -54,7 +61,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose }) => 
                 to={item.path}
                 onClick={onClose}
                 className={({ isActive }) =>
-                  `flex items-center gap-3.5 px-4 py-3 rounded-[8px] transition-all duration-150 group ${
+                  `flex items-center gap-3.5 px-4 py-2.5 rounded-[8px] transition-all duration-150 group ${
                     isActive
                       ? 'bg-[#FCE0BE] text-[#0B3C9D] font-semibold shadow-xs'
                       : 'text-[#0B3C9D] hover:bg-[#FCE0BE]/60 font-medium'
@@ -64,12 +71,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose }) => 
                 {({ isActive }) => (
                   <>
                     <Icon
-                      size={20}
+                      size={19}
                       className={`shrink-0 transition-colors ${
                         isActive ? 'text-[#0F2A5C]' : 'text-[#0F2A5C]/80 group-hover:text-[#0F2A5C]'
                       }`}
                     />
-                    <span className="text-[17px] tracking-tight leading-none text-[#0B3C9D]">
+                    <span className="text-[15px] tracking-tight leading-none text-[#0B3C9D]">
                       {item.label}
                     </span>
                   </>
@@ -82,4 +89,3 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen = false, onClose }) => 
     </>
   );
 };
-

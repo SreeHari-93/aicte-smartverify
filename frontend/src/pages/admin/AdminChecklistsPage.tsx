@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import {
-  ListChecks,
   Plus,
   Edit,
   Trash2,
@@ -18,6 +17,8 @@ import {
 } from '../../api/admin';
 import { StatusPill } from '../../components/StatusPill';
 import { Modal } from '../../components/Modal';
+import { DataTable, ColumnDef } from '../../components/DataTable';
+import { ActionMenu } from '../../components/ActionMenu';
 
 const INSTITUTE_TYPES = [
   'ALL',
@@ -29,7 +30,11 @@ const INSTITUTE_TYPES = [
   'POLYTECHNIC',
 ];
 
-export const AdminChecklistsPage: React.FC = () => {
+interface AdminChecklistsPageProps {
+  readOnly?: boolean;
+}
+
+export const AdminChecklistsPage: React.FC<AdminChecklistsPageProps> = ({ readOnly = false }) => {
   const [categories, setCategories] = useState<ApplicationCategoryOut[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('EOA');
   const [checklistItems, setChecklistItems] = useState<ChecklistItemOut[]>([]);
@@ -237,29 +242,27 @@ export const AdminChecklistsPage: React.FC = () => {
       )}
 
       {/* Header Card */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-6 sm:p-8 shadow-sm">
+      <div className="bg-white rounded-xl border border-slate-200 p-6 sm:p-8 shadow-sm">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-100">
           <div>
-            <div className="inline-flex items-center gap-2 bg-[#E3F0FF] text-[#0B3C9D] text-xs font-semibold px-2.5 py-1 rounded-md mb-2">
-              <ListChecks size={14} />
-              <span>Application Category • Mandatory Documents Checklist</span>
-            </div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-[#0F2A5C] tracking-tight">
-              Required Documents Checklists
+            <h1 className="text-xl font-bold text-slate-900 tracking-tight">
+              Required documents checklists
             </h1>
-            <p className="text-sm text-slate-500 mt-1 max-w-2xl">
-              Configure required documents per application category and institute type. Changes apply to live applications after a RuleSet Publish.
+            <p className="text-sm text-slate-600 mt-1 max-w-2xl">
+              Configure required documents per application category and institute type.
             </p>
           </div>
 
           <div className="flex items-center gap-3">
-            <button
-              onClick={openCreateModal}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#0B3C9D] text-white text-sm font-bold hover:bg-[#0F2A5C] shadow-sm transition-all"
-            >
-              <Plus size={18} />
-              <span>Add Document Requirement</span>
-            </button>
+            {!readOnly && (
+              <button
+                onClick={openCreateModal}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#0B3C9D] text-white text-sm font-bold hover:bg-[#0F2A5C] shadow-sm transition-all"
+              >
+                <Plus size={18} />
+                <span>Add Document Requirement</span>
+              </button>
+            )}
             <button
               onClick={() => loadChecklist(selectedCategory)}
               className="p-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50"
@@ -271,7 +274,7 @@ export const AdminChecklistsPage: React.FC = () => {
 
         {/* Category Tabs */}
         <div className="mt-6 flex flex-wrap items-center gap-2 border-b border-slate-100 pb-4">
-          <span className="text-xs font-bold uppercase tracking-wider text-slate-400 mr-2">Category:</span>
+          <span className="text-xs font-semibold text-slate-700 mr-2">Category:</span>
           {categories.map((cat) => (
             <button
               key={cat.code}
@@ -290,7 +293,7 @@ export const AdminChecklistsPage: React.FC = () => {
         {/* Filter and RuleSet notice */}
         <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs">
           <div className="flex items-center gap-2">
-            <span className="text-slate-500 font-semibold">Institute Discipline:</span>
+            <span className="text-slate-600 font-semibold">Institute Discipline:</span>
             <select
               value={instituteTypeFilter}
               onChange={(e) => setInstituteTypeFilter(e.target.value)}
@@ -302,7 +305,7 @@ export const AdminChecklistsPage: React.FC = () => {
             </select>
           </div>
 
-          <div className="inline-flex items-center gap-2 text-slate-500 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
+          <div className="inline-flex items-center gap-2 text-slate-600 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
             <Info size={14} className="text-[#0B3C9D]" />
             <span>
               Bound RuleSet: <strong>{activeRuleSet?.name || 'APH 2026-27'}</strong> ({activeRuleSet?.version_label || 'v1.0'})
@@ -312,98 +315,139 @@ export const AdminChecklistsPage: React.FC = () => {
       </div>
 
       {/* Checklists Table */}
-      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-        <div className="overflow-x-auto w-full">
-          <table className="w-full text-left text-sm text-slate-700">
-            <thead className="bg-slate-50 text-slate-600 font-semibold border-b border-slate-200 uppercase text-xs tracking-wider">
-              <tr>
-                <th className="py-4 px-5 w-16 text-center">Order</th>
-                <th className="py-4 px-5">Document Type</th>
-                <th className="py-4 px-5">Requirement</th>
-                <th className="py-4 px-5">Institute Type</th>
-                <th className="py-4 px-5">Min Count</th>
-                <th className="py-4 px-5">Validity Requirement</th>
-                <th className="py-4 px-5">Guidance / Help Text</th>
-                <th className="py-4 px-5 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {filteredItems.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="py-12 text-center text-slate-400">
-                    No required documents configured for category {selectedCategory}.
-                  </td>
-                </tr>
-              ) : (
-                filteredItems.map((item, idx) => (
-                  <tr key={item.id} className="hover:bg-slate-50/70 transition-colors">
-                    <td className="py-4 px-5 text-center">
-                      <div className="flex items-center justify-center gap-1">
-                        <span className="font-mono font-bold text-slate-500 w-5">{idx + 1}</span>
-                        <div className="flex flex-col">
-                          <button
-                            onClick={() => handleMoveOrder(idx, 'up')}
-                            disabled={idx === 0}
-                            className="text-slate-400 hover:text-slate-700 disabled:opacity-20"
-                          >
-                            <ArrowUp size={12} />
-                          </button>
-                          <button
-                            onClick={() => handleMoveOrder(idx, 'down')}
-                            disabled={idx === filteredItems.length - 1}
-                            className="text-slate-400 hover:text-slate-700 disabled:opacity-20"
-                          >
-                            <ArrowDown size={12} />
-                          </button>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="py-4 px-5">
-                      <p className="font-bold text-[#0F2A5C]">{item.document_type?.name || 'Document'}</p>
-                      <p className="text-xs font-mono text-[#0B3C9D]">{item.document_type?.code}</p>
-                    </td>
-                    <td className="py-4 px-5 whitespace-nowrap">
-                      <StatusPill status={item.is_mandatory ? 'MANDATORY' : 'OPTIONAL'} />
-                    </td>
-                    <td className="py-4 px-5 whitespace-nowrap text-xs font-semibold text-slate-700">
-                      <span className="px-2.5 py-1 rounded-md bg-slate-100 border border-slate-200">
-                        {item.institute_type || 'ALL'}
-                      </span>
-                    </td>
-                    <td className="py-4 px-5 whitespace-nowrap text-xs font-mono font-bold text-slate-700">
-                      {item.min_count || 1} file(s)
-                    </td>
-                    <td className="py-4 px-5 whitespace-nowrap text-xs text-slate-600">
-                      Min {item.min_validity_days_remaining || 30} days validity
-                    </td>
-                    <td className="py-4 px-5 text-xs text-slate-500 max-w-xs truncate">
-                      {item.help_text || '—'}
-                    </td>
-                    <td className="py-4 px-5 text-right whitespace-nowrap">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <button
-                          onClick={() => openEditModal(item)}
-                          className="p-1.5 text-slate-600 hover:bg-slate-100 rounded-md"
-                          title="Edit requirement"
-                        >
-                          <Edit size={15} />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(item.id)}
-                          className="p-1.5 text-red-600 hover:bg-red-50 rounded-md"
-                          title="Delete requirement"
-                        >
-                          <Trash2 size={15} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      {(() => {
+        const columns: ColumnDef<ChecklistItemOut>[] = [
+          {
+            key: 'order',
+            header: 'Order',
+            width: '8%',
+            align: 'center',
+            render: (_, idx) => (
+              <div className="flex items-center justify-center gap-1.5">
+                <span className="font-mono font-bold text-slate-700 w-4 text-center">{idx + 1}</span>
+                {!readOnly && (
+                  <div className="flex flex-col">
+                    <button
+                      onClick={() => handleMoveOrder(idx, 'up')}
+                      disabled={idx === 0}
+                      className="text-slate-500 hover:text-slate-800 disabled:opacity-30"
+                      title="Move Up"
+                    >
+                      <ArrowUp size={11} />
+                    </button>
+                    <button
+                      onClick={() => handleMoveOrder(idx, 'down')}
+                      disabled={idx === filteredItems.length - 1}
+                      className="text-slate-500 hover:text-slate-800 disabled:opacity-30"
+                      title="Move Down"
+                    >
+                      <ArrowDown size={11} />
+                    </button>
+                  </div>
+                )}
+              </div>
+            ),
+          },
+          {
+            key: 'document_type',
+            header: 'Document type',
+            width: '26%',
+            align: 'left',
+            render: (item) => (
+              <div>
+                <span className="font-medium text-slate-900 block line-clamp-2" title={item.document_type?.name}>
+                  {item.document_type?.name || 'Document'}
+                </span>
+                <span className="text-[11px] font-mono text-[#0B3C9D] font-medium block mt-0.5">
+                  {item.document_type?.code}
+                </span>
+              </div>
+            ),
+          },
+          {
+            key: 'requirement',
+            header: 'Requirement',
+            width: '14%',
+            align: 'left',
+            render: (item) => <StatusPill status={item.is_mandatory ? 'MANDATORY' : 'OPTIONAL'} />,
+          },
+          {
+            key: 'institute_type',
+            header: 'Discipline',
+            width: '14%',
+            align: 'left',
+            render: (item) => (
+              <span className="px-2.5 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-xs font-semibold text-slate-700">
+                {item.institute_type || 'ALL'}
+              </span>
+            ),
+          },
+          {
+            key: 'min_count',
+            header: 'Min count',
+            width: '10%',
+            align: 'right',
+            render: (item) => (
+              <span className="font-semibold text-slate-900 text-xs">
+                {item.min_count || 1} file(s)
+              </span>
+            ),
+          },
+          {
+            key: 'validity',
+            header: 'Validity',
+            width: '14%',
+            align: 'left',
+            render: (item) => (
+              <span className="text-xs text-slate-700">
+                Min {item.min_validity_days_remaining || 30} days
+              </span>
+            ),
+          },
+          {
+            key: 'actions',
+            header: 'Actions',
+            width: '14%',
+            align: 'right',
+            render: (item) => {
+              if (readOnly) {
+                return <span className="text-xs text-slate-600 font-medium">View-only</span>;
+              }
+              return (
+                <div className="flex justify-end">
+                  <ActionMenu
+                    primaryAction={{
+                      label: 'Edit',
+                      onClick: () => openEditModal(item),
+                      icon: <Edit size={12} />,
+                      variant: 'secondary',
+                    }}
+                    menuItems={[
+                      {
+                        label: 'Remove',
+                        onClick: () => handleDelete(item.id),
+                        icon: <Trash2 size={12} />,
+                        danger: true,
+                      },
+                    ]}
+                  />
+                </div>
+              );
+            },
+          },
+        ];
+
+        return (
+          <DataTable
+            columns={columns}
+            data={filteredItems}
+            keyExtractor={(item) => item.id}
+            isLoading={isLoading}
+            emptyMessage={`No required documents configured for category ${selectedCategory}.`}
+            isLong={filteredItems.length > 12}
+          />
+        );
+      })()}
 
       {/* ========================================================================= */}
       {/* ADD / EDIT CHECKLIST ITEM MODAL                                           */}

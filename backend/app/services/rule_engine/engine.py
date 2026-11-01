@@ -106,6 +106,10 @@ class RuleEngine:
             )
 
         try:
+            if isinstance(definition_data, dict) and "type" not in definition_data and "evaluator" in definition_data:
+                definition_data = dict(definition_data)
+                definition_data["type"] = definition_data["evaluator"]
+
             # Validate definition structure safely
             parsed_def = RuleDefinition.model_validate(definition_data)
             def_root = parsed_def.root

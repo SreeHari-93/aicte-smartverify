@@ -32,7 +32,7 @@ def test_account_lockout_after_five_failed_attempts(client, db_session, seed_tes
             },
         )
         assert res.status_code == 401
-        assert "Invalid credentials" in res.json()["detail"]
+        assert "Incorrect login ID or password" in res.json()["detail"]
 
     # 5th failed attempt should trigger lockout (423 Locked)
     cid = _create_mock_captcha(db_session, "VALID")

@@ -47,5 +47,5 @@ def test_ip_rate_limiting(client, db_session, seed_test_data):
         },
     )
     assert res6.status_code == 429
-    assert "Too many attempts from this IP" in res6.json()["detail"]
+    assert "Too many attempts. Try again in a few minutes." in res6.json()["detail"]
     assert "Retry-After" in res6.headers

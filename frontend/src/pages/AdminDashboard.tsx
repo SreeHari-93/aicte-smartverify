@@ -2,280 +2,327 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Link } from 'react-router-dom';
 import {
-  Shield,
-  CheckCircle2,
-  Scale,
-  Files,
-  ListChecks,
-  ScrollText,
-  ArrowRight,
-  Layers,
   Clock,
   AlertTriangle,
-  MessageSquare,
+  ArrowRight,
+  FileSignature,
+  Hourglass,
+  Calendar,
+  Users,
 } from 'lucide-react';
-import { adminApi, RuleOut, RuleSetOut, DocumentTypeOut, AdminDashboardStats } from '../api/admin';
+import { workflowApi, WorkflowDashboardData } from '../api/workflow';
 
 export const AdminDashboard: React.FC = () => {
   const { user } = useAuth();
-  const [rules, setRules] = useState<RuleOut[]>([]);
-  const [ruleSets, setRuleSets] = useState<RuleSetOut[]>([]);
-  const [docTypes, setDocTypes] = useState<DocumentTypeOut[]>([]);
-  const [stats, setStats] = useState<AdminDashboardStats | null>(null);
+  const [data, setData] = useState<WorkflowDashboardData | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [rulesData, rulesetsData, docTypesData, statsData] = await Promise.all([
-          adminApi.listRules().catch(() => []),
-          adminApi.listRuleSets().catch(() => []),
-          adminApi.listDocumentTypes().catch(() => []),
-          adminApi.getDashboardStats().catch(() => null),
-        ]);
-        setRules(rulesData);
-        setRuleSets(rulesetsData);
-        setDocTypes(docTypesData);
-        setStats(statsData);
-      } catch {
-        // quiet fallback
+        setIsLoading(true);
+        const wfData = await workflowApi.getDashboard();
+        setData(wfData);
+      } catch (err) {
+        console.error('Failed to load workflow dashboard metrics:', err);
+      } finally {
+        setIsLoading(false);
       }
     };
     fetchData();
   }, []);
 
-  const activeRuleSet = ruleSets.find((rs) => rs.status === 'ACTIVE' || rs.status === 'PUBLISHED');
+  const counters = data?.counters || {
+    total: 0,
+    in_progress: 0,
+    returned: 0,
+    on_hold: 0,
+    completed: 0,
+    overdue: 0,
+    due_in_7_days: 0,
+    open_undertakings: 0,
+    documents_expiring: 0,
+    evc_pending: 0,
+  };
+
+  const isCommitteeMember = user?.role === 'COMMITTEE_MEMBER';
+  const todayFormatted = (() => {
+    const d = new Date();
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    return `${day}-${month}-${year}`;
+  })();
 
   return (
-    <div className="space-y-6">
-      {/* 1. Admin Profile & Status Card */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 p-6 sm:p-8 shadow-sm">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-100">
+    <div className="space-y-6 pb-12">
+      {/* 1. Page Title & Today's Date */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div>
-            <div className="inline-flex items-center gap-2 bg-[#E3F0FF] text-[#0B3C9D] text-xs font-semibold px-2.5 py-1 rounded-md mb-2">
-              <Shield size={14} />
-              <span>AICTE Central Administration Console</span>
-            </div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-[#0F2A5C] tracking-tight">
-              Welcome, {user?.email || 'Administrator'}
-            </h1>
-            <p className="text-sm text-slate-500 mt-1">
-              Role: <strong className="text-slate-800">{user?.role || 'ADMIN'}</strong> | Session Verified (Argon2id + SameSite Cookies)
-            </p>
+            <h1 className="text-xl font-bold text-slate-900 tracking-tight">Dashboard</h1>
+            <p className="text-sm text-slate-600 mt-1">Overview of application workflows, deadlines, and operational metrics.</p>
           </div>
-
-          <div className="inline-flex items-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-800 px-3.5 py-2 rounded-xl text-xs font-bold shrink-0">
-            <CheckCircle2 size={16} className="text-emerald-600" />
-            <span>Full Governance Access</span>
-          </div>
-        </div>
-
-        {/* 2. Review Workspaces Counters Row */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6">
-          <Link
-            to="/admin/verification-queue"
-            className="p-4 bg-gradient-to-br from-blue-50/70 to-white rounded-xl border border-blue-200/80 hover:border-[#0B3C9D] transition-all group"
-          >
-            <div className="flex items-center justify-between">
-              <span className="text-xs uppercase font-extrabold text-[#0B3C9D]">Pending Verifications</span>
-              <Clock size={18} className="text-[#0B3C9D]" />
-            </div>
-            <p className="text-3xl font-extrabold text-[#0F2A5C] mt-2">
-              {stats?.pending_verifications_count ?? 0}
-            </p>
-            <div className="mt-2 flex items-center justify-between text-xs text-slate-500">
-              <span>Manual review & external check</span>
-              <ArrowRight size={13} className="text-[#0B3C9D] group-hover:translate-x-1 transition-transform" />
-            </div>
-          </Link>
-
-          <Link
-            to="/admin/anomalies"
-            className="p-4 bg-gradient-to-br from-amber-50/70 to-white rounded-xl border border-amber-200/80 hover:border-[#E8650A] transition-all group"
-          >
-            <div className="flex items-center justify-between">
-              <span className="text-xs uppercase font-extrabold text-[#E8650A]">Open Anomaly Flags</span>
-              <AlertTriangle size={18} className="text-[#E8650A]" />
-            </div>
-            <p className="text-3xl font-extrabold text-[#0F2A5C] mt-2">
-              {stats?.open_anomalies_count ?? 0}
-            </p>
-            <div className="mt-2 flex items-center justify-between text-xs text-slate-500">
-              <span>Needs verification by officials</span>
-              <ArrowRight size={13} className="text-[#E8650A] group-hover:translate-x-1 transition-transform" />
-            </div>
-          </Link>
-
-          <Link
-            to="/admin/complaints"
-            className="p-4 bg-gradient-to-br from-purple-50/70 to-white rounded-xl border border-purple-200/80 hover:border-purple-600 transition-all group"
-          >
-            <div className="flex items-center justify-between">
-              <span className="text-xs uppercase font-extrabold text-purple-700">Open Grievances</span>
-              <MessageSquare size={18} className="text-purple-700" />
-            </div>
-            <p className="text-3xl font-extrabold text-[#0F2A5C] mt-2">
-              {stats?.open_complaints_count ?? 0}
-            </p>
-            <div className="mt-2 flex items-center justify-between text-xs text-slate-500">
-              <span>Active dispute & support tickets</span>
-              <ArrowRight size={13} className="text-purple-700 group-hover:translate-x-1 transition-transform" />
-            </div>
-          </Link>
-        </div>
-
-        {/* 3. Policy & Configuration Metrics Row */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
-          <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
-            <div className="flex items-center justify-between">
-              <span className="text-xs uppercase font-bold text-slate-500">Configured Rules</span>
-              <Scale size={18} className="text-[#0B3C9D]" />
-            </div>
-            <p className="text-2xl font-bold text-[#0F2A5C] mt-2">{rules.length}</p>
-            <span className="text-xs text-slate-500">
-              {rules.filter((r) => r.status === 'DRAFT').length} Draft | {rules.filter((r) => r.status === 'PUBLISHED').length} Published
-            </span>
-          </div>
-
-          <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
-            <div className="flex items-center justify-between">
-              <span className="text-xs uppercase font-bold text-slate-500">Active RuleSet</span>
-              <Layers size={18} className="text-[#E8650A]" />
-            </div>
-            <p className="text-2xl font-bold text-[#0F2A5C] mt-2 truncate">
-              {activeRuleSet?.version_label || 'v1.0'}
-            </p>
-            <span className="text-xs text-slate-500 truncate block">
-              {activeRuleSet?.name || 'APH 2026-27'}
-            </span>
-          </div>
-
-          <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
-            <div className="flex items-center justify-between">
-              <span className="text-xs uppercase font-bold text-slate-500">Document Taxonomy</span>
-              <Files size={18} className="text-emerald-600" />
-            </div>
-            <p className="text-2xl font-bold text-[#0F2A5C] mt-2">{docTypes.length}</p>
-            <span className="text-xs text-slate-500">Recognized Document Types</span>
-          </div>
-
-          <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
-            <div className="flex items-center justify-between">
-              <span className="text-xs uppercase font-bold text-slate-500">Audit Trail</span>
-              <ScrollText size={18} className="text-indigo-600" />
-            </div>
-            <p className="text-2xl font-bold text-[#0F2A5C] mt-2">Active</p>
-            <span className="text-xs text-slate-500">Append-Only Scrutiny</span>
+          <div className="text-xs text-slate-600 font-medium">
+            {todayFormatted}
           </div>
         </div>
       </div>
 
-      {/* 4. Quick Action Navigation Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      {/* 2. Primary Workflow Counters Grid (Plain white cards, soft shadow) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+        {/* Card 1: In progress */}
         <Link
-          to="/admin/verification-queue"
-          className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm hover:border-[#0B3C9D] transition-all group"
+          to={isCommitteeMember ? '/admin/applications' : '/admin/workflow'}
+          className="p-5 bg-white rounded-lg border border-slate-200 shadow-sm hover:border-[#0B3C9D] transition-colors group flex flex-col justify-between"
         >
-          <div className="w-12 h-12 rounded-xl bg-[#E3F0FF] text-[#0B3C9D] flex items-center justify-center mb-4 group-hover:bg-[#0B3C9D] group-hover:text-white transition-colors">
-            <Clock size={24} />
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-slate-600">In progress</span>
+            <Clock size={16} className="text-[#0B3C9D]" />
           </div>
-          <h2 className="text-lg font-bold text-[#0F2A5C]">Verification Queue</h2>
-          <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-            Review statutory documents needing manual approval, resolve external registry mismatches, and request re-uploads.
+          <p className="text-2xl font-bold text-[#0F2A5C] mt-3">
+            {isLoading ? '...' : counters.in_progress}
           </p>
-          <div className="mt-4 flex items-center gap-1.5 text-xs font-bold text-[#0B3C9D]">
-            <span>Open Verification Queue</span>
+          <div className="mt-3 flex items-center justify-between text-xs text-slate-600">
+            <span>Active applications</span>
+            <ArrowRight size={12} className="text-[#0B3C9D] group-hover:translate-x-1 transition-transform" />
+          </div>
+        </Link>
+
+        {/* Card 2: Overdue */}
+        <Link
+          to={isCommitteeMember ? '/admin/applications' : '/admin/workflow'}
+          className="p-5 bg-white rounded-lg border border-slate-200 shadow-sm hover:border-red-400 transition-colors group flex flex-col justify-between"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-red-600">Overdue</span>
+            <AlertTriangle size={16} className="text-red-600" />
+          </div>
+          <p className="text-2xl font-bold text-red-700 mt-3">
+            {isLoading ? '...' : counters.overdue}
+          </p>
+          <div className="mt-3 flex items-center justify-between text-xs text-slate-600">
+            <span>Exceeded SLA</span>
+            <ArrowRight size={12} className="text-red-600 group-hover:translate-x-1 transition-transform" />
+          </div>
+        </Link>
+
+        {/* Card 3: Due in 7 days */}
+        <Link
+          to={isCommitteeMember ? '/admin/applications' : '/admin/workflow'}
+          className="p-5 bg-white rounded-lg border border-slate-200 shadow-sm hover:border-amber-400 transition-colors group flex flex-col justify-between"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-amber-700">Due in 7 days</span>
+            <Calendar size={16} className="text-[#E8650A]" />
+          </div>
+          <p className="text-2xl font-bold text-amber-800 mt-3">
+            {isLoading ? '...' : counters.due_in_7_days}
+          </p>
+          <div className="mt-3 flex items-center justify-between text-xs text-slate-600">
+            <span>Approaching deadline</span>
+            <ArrowRight size={12} className="text-[#E8650A] group-hover:translate-x-1 transition-transform" />
+          </div>
+        </Link>
+
+        {/* Card 4: Open undertakings */}
+        <Link
+          to={isCommitteeMember ? '/admin/dashboard' : '/admin/undertakings'}
+          className="p-5 bg-white rounded-lg border border-slate-200 shadow-sm hover:border-purple-400 transition-colors group flex flex-col justify-between"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-purple-700">Open undertakings</span>
+            <FileSignature size={16} className="text-purple-700" />
+          </div>
+          <p className="text-2xl font-bold text-purple-900 mt-3">
+            {isLoading ? '...' : counters.open_undertakings ?? 0}
+          </p>
+          <div className="mt-3 flex items-center justify-between text-xs text-slate-600">
+            <span>Active conditions</span>
+            <ArrowRight size={12} className="text-purple-700 group-hover:translate-x-1 transition-transform" />
+          </div>
+        </Link>
+
+        {/* Card 5: Expiring documents */}
+        <Link
+          to={isCommitteeMember ? '/admin/dashboard' : '/admin/validity'}
+          className="p-5 bg-white rounded-lg border border-slate-200 shadow-sm hover:border-orange-400 transition-colors group flex flex-col justify-between"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-orange-700">Documents expiring</span>
+            <Hourglass size={16} className="text-orange-600" />
+          </div>
+          <p className="text-2xl font-bold text-orange-900 mt-3">
+            {isLoading ? '...' : counters.documents_expiring ?? 0}
+          </p>
+          <div className="mt-3 flex items-center justify-between text-xs text-slate-600">
+            <span>Leases and NOCs</span>
+            <ArrowRight size={12} className="text-orange-600 group-hover:translate-x-1 transition-transform" />
+          </div>
+        </Link>
+
+        {/* Card 6: EVC pending */}
+        <Link
+          to="/admin/evc"
+          className="p-5 bg-white rounded-lg border border-slate-200 shadow-sm hover:border-emerald-400 transition-colors group flex flex-col justify-between"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-medium text-emerald-800">EVC pending</span>
+            <Users size={16} className="text-emerald-700" />
+          </div>
+          <p className="text-2xl font-bold text-emerald-900 mt-3">
+            {isLoading ? '...' : counters.evc_pending ?? 0}
+          </p>
+          <div className="mt-3 flex items-center justify-between text-xs text-slate-600">
+            <span>Visit scheduling</span>
+            <ArrowRight size={12} className="text-emerald-700 group-hover:translate-x-1 transition-transform" />
+          </div>
+        </Link>
+      </div>
+
+      {/* 3. Section Navigation Cards (Plain white, consistent soft shadow, no circle icons next to headings) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {!isCommitteeMember && (
+          <Link
+            to="/admin/workflow"
+            className="bg-white rounded-lg border border-slate-200 p-6 shadow-sm hover:border-slate-300 transition-colors group flex flex-col justify-between"
+          >
+            <div>
+              <h2 className="text-base font-semibold text-slate-900">Workflow</h2>
+              <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+                Track application stages, monitor regional pipelines, and manage officer assignments.
+              </p>
+            </div>
+            <div className="mt-4 flex items-center gap-1.5 text-xs font-medium text-[#0B3C9D]">
+              <span>Open workflow</span>
+              <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
+            </div>
+          </Link>
+        )}
+
+        <Link
+          to="/admin/applications"
+          className="bg-white rounded-lg border border-slate-200 p-6 shadow-sm hover:border-slate-300 transition-colors group flex flex-col justify-between"
+        >
+          <div>
+            <h2 className="text-base font-semibold text-slate-900">Applications</h2>
+            <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+              {isCommitteeMember
+                ? 'Review assigned applications, inspect stage history, and verify submitted documents.'
+                : 'Filter and inspect institutional applications across regions, categories, and review stages.'}
+            </p>
+          </div>
+          <div className="mt-4 flex items-center gap-1.5 text-xs font-medium text-[#0B3C9D]">
+            <span>View applications</span>
             <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
           </div>
         </Link>
 
         <Link
-          to="/admin/anomalies"
-          className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm hover:border-[#E8650A] transition-all group"
+          to="/admin/evc"
+          className="bg-white rounded-lg border border-slate-200 p-6 shadow-sm hover:border-slate-300 transition-colors group flex flex-col justify-between"
         >
-          <div className="w-12 h-12 rounded-xl bg-amber-50 text-[#E8650A] flex items-center justify-center mb-4 group-hover:bg-[#E8650A] group-hover:text-white transition-colors">
-            <AlertTriangle size={24} />
+          <div>
+            <h2 className="text-base font-semibold text-slate-900">EVC visits</h2>
+            <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+              Schedule inspection visits with date conflict detection, assign committee members, and record visit reports.
+            </p>
           </div>
-          <h2 className="text-lg font-bold text-[#0F2A5C]">Anomaly Review</h2>
-          <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-            Scrutinize items flagged as potential anomalies, inspect visual evidence heatmaps, and clarify or escalate flags.
-          </p>
-          <div className="mt-4 flex items-center gap-1.5 text-xs font-bold text-[#E8650A]">
-            <span>Scrutinize Anomalies</span>
+          <div className="mt-4 flex items-center gap-1.5 text-xs font-medium text-[#0B3C9D]">
+            <span>Manage visits</span>
             <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
           </div>
         </Link>
 
+        {!isCommitteeMember && (
+          <Link
+            to="/admin/undertakings"
+            className="bg-white rounded-lg border border-slate-200 p-6 shadow-sm hover:border-slate-300 transition-colors group flex flex-col justify-between"
+          >
+            <div>
+              <h2 className="text-base font-semibold text-slate-900">Undertakings</h2>
+              <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+                Issue conditional compliance undertakings, track deadlines, verify institute evidence, and record decisions.
+              </p>
+            </div>
+            <div className="mt-4 flex items-center gap-1.5 text-xs font-medium text-[#0B3C9D]">
+              <span>Review undertakings</span>
+              <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
+            </div>
+          </Link>
+        )}
+
+        {!isCommitteeMember && (
+          <Link
+            to="/admin/validity"
+            className="bg-white rounded-lg border border-slate-200 p-6 shadow-sm hover:border-slate-300 transition-colors group flex flex-col justify-between"
+          >
+            <div>
+              <h2 className="text-base font-semibold text-slate-900">Document validity</h2>
+              <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+                Monitor validity registers for fire safety NOCs, building stability certificates, and land leases.
+              </p>
+            </div>
+            <div className="mt-4 flex items-center gap-1.5 text-xs font-medium text-[#0B3C9D]">
+              <span>Inspect validity register</span>
+              <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
+            </div>
+          </Link>
+        )}
+
         <Link
-          to="/admin/complaints"
-          className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm hover:border-purple-600 transition-all group"
+          to="/admin/alerts"
+          className="bg-white rounded-lg border border-slate-200 p-6 shadow-sm hover:border-slate-300 transition-colors group flex flex-col justify-between"
         >
-          <div className="w-12 h-12 rounded-xl bg-purple-50 text-purple-700 flex items-center justify-center mb-4 group-hover:bg-purple-700 group-hover:text-white transition-colors">
-            <MessageSquare size={24} />
+          <div>
+            <h2 className="text-base font-semibold text-slate-900">Alerts</h2>
+            <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+              Review due-soon reminders, overdue escalations, unread supervisory alerts, and automated notifications.
+            </p>
           </div>
-          <h2 className="text-lg font-bold text-[#0F2A5C]">Complaints Inbox</h2>
-          <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-            Resolve institute grievances, maintain confidential officer notes, assign tickets, and dispatch status updates.
-          </p>
-          <div className="mt-4 flex items-center gap-1.5 text-xs font-bold text-purple-700">
-            <span>Manage Grievances</span>
+          <div className="mt-4 flex items-center gap-1.5 text-xs font-medium text-[#0B3C9D]">
+            <span>Open alerts</span>
             <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
           </div>
         </Link>
       </div>
 
-      {/* 5. Second Row of Config Navigation Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Link
-          to="/admin/rules"
-          className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm hover:border-[#0B3C9D] transition-all group"
-        >
-          <div className="w-12 h-12 rounded-xl bg-[#E3F0FF] text-[#0B3C9D] flex items-center justify-center mb-4 group-hover:bg-[#0B3C9D] group-hover:text-white transition-colors">
-            <Scale size={24} />
-          </div>
-          <h2 className="text-lg font-bold text-[#0F2A5C]">Rules Manager</h2>
-          <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-            Create, duplicate, simulate, version, and publish declarative rules across the 9 regulatory evaluators.
-          </p>
-          <div className="mt-4 flex items-center gap-1.5 text-xs font-bold text-[#0B3C9D]">
-            <span>Manage Rules</span>
-            <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
-          </div>
-        </Link>
+      {/* 4. Second Row for Central Configuration (Admin & Officers) */}
+      {!isCommitteeMember && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <Link
+            to="/admin/rules"
+            className="bg-white rounded-lg border border-slate-200 p-6 shadow-sm hover:border-slate-300 transition-colors group flex flex-col justify-between"
+          >
+            <div>
+              <h2 className="text-base font-semibold text-slate-900">Rules and timelines</h2>
+              <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+                Configure workflow SLAs, document checklists, and notification offset rules across all 4 templates.
+              </p>
+            </div>
+            <div className="mt-3 flex items-center gap-1 text-xs font-medium text-[#0B3C9D]">
+              <span>Open rules and timelines</span>
+              <ArrowRight size={12} className="group-hover:translate-x-1 transition-transform" />
+            </div>
+          </Link>
 
-        <Link
-          to="/admin/document-types"
-          className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm hover:border-[#0B3C9D] transition-all group"
-        >
-          <div className="w-12 h-12 rounded-xl bg-orange-50 text-[#E8650A] flex items-center justify-center mb-4 group-hover:bg-[#E8650A] group-hover:text-white transition-colors">
-            <Files size={24} />
-          </div>
-          <h2 className="text-lg font-bold text-[#0F2A5C]">Document Types</h2>
-          <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-            Configure accepted file formats, classification keywords for OCR detection, and statutory authority adapters.
-          </p>
-          <div className="mt-4 flex items-center gap-1.5 text-xs font-bold text-[#E8650A]">
-            <span>Configure Document Types</span>
-            <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
-          </div>
-        </Link>
-
-        <Link
-          to="/admin/checklists"
-          className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm hover:border-[#0B3C9D] transition-all group"
-        >
-          <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center mb-4 group-hover:bg-emerald-700 group-hover:text-white transition-colors">
-            <ListChecks size={24} />
-          </div>
-          <h2 className="text-lg font-bold text-[#0F2A5C]">Required Checklists</h2>
-          <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-            Define mandatory and optional document checklists per application category and institute discipline.
-          </p>
-          <div className="mt-4 flex items-center gap-1.5 text-xs font-bold text-emerald-700">
-            <span>Manage Checklists</span>
-            <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
-          </div>
-        </Link>
-      </div>
+          <Link
+            to="/admin/reports"
+            className="bg-white rounded-lg border border-slate-200 p-6 shadow-sm hover:border-slate-300 transition-colors group flex flex-col justify-between"
+          >
+            <div>
+              <h2 className="text-base font-semibold text-slate-900">Reports</h2>
+              <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+                Generate and download summary reports covering workflow progression, overdue cases, EVC visit status, and active undertakings.
+              </p>
+            </div>
+            <div className="mt-3 flex items-center gap-1 text-xs font-medium text-[#0B3C9D]">
+              <span>Generate reports</span>
+              <ArrowRight size={12} className="group-hover:translate-x-1 transition-transform" />
+            </div>
+          </Link>
+        </div>
+      )}
     </div>
   );
 };

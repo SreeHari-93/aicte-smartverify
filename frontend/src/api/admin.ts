@@ -1,4 +1,5 @@
 import { apiClient } from './client';
+import { InfrastructureData } from './institute';
 
 export interface DocumentTypeOut {
   id: number;
@@ -352,6 +353,10 @@ export const adminApi = {
   // 5. Applications & Audit Logs
   listApplications: async () => {
     const res = await apiClient.get<AdminApplicationOut[]>('/api/v1/admin/applications');
+    return res.data;
+  },
+  getInfrastructure: async (appId: string | number): Promise<InfrastructureData> => {
+    const res = await apiClient.get<InfrastructureData>(`/api/v1/admin/applications/${appId}/infrastructure`);
     return res.data;
   },
   listAuditLogs: async (params?: { action?: string; user_id?: number; limit?: number; offset?: number }) => {

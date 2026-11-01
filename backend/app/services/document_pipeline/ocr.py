@@ -676,6 +676,13 @@ class OCRService:
                 doc.status = "Verified"
             db.commit()
 
+            # Automatically register or update DocumentValidityRecord if expiry date is present
+            try:
+                from backend.app.services.validity_service import ValidityService
+                ValidityService.register_or_update_document_validity(db, doc)
+            except Exception as val_reg_err:
+                logger.warning(f"[JOB VALIDITY REGISTER NOTE] Document #{doc.id}: {val_reg_err}")
+
             # ------------------------------------------------------------------
             # Statutory Verification is ALWAYS triggered when OCR/Extraction finish
             # ------------------------------------------------------------------

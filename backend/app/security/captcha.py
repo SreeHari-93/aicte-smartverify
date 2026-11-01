@@ -2,91 +2,67 @@ import base64
 import hashlib
 import io
 import random
-import string
-from datetime import datetime, timedelta, timezone
-from PIL import Image, ImageDraw, ImageFont, ImageFilter
-from backend.app.config import settings
+from datetime import datetime, timezone
+from PIL import Image, ImageDraw, ImageFont
 
 
 def hash_captcha_text(text: str) -> str:
-    """Hash normalized (uppercase, stripped) captcha text with SHA-256"""
-    clean_text = text.strip().upper()
+    """Hash normalized (uppercase, stripped, no whitespace) captcha text with SHA-256"""
+    clean_text = text.strip().replace(" ", "").upper()
     return hashlib.sha256(clean_text.encode("utf-8")).hexdigest()
 
 
 def generate_captcha_image(text_length: int = 5) -> tuple[str, str]:
     """
-    Generate distorted captcha image using Pillow.
+    Generate clean, high-contrast, crystal-clear captcha image using Pillow.
+    Uses unambiguous characters and bold font for 100% human legibility.
     Returns: (text, base64_image_data_uri)
     """
-    # Exclude ambiguous characters like 0, O, I, 1
-    chars = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
+    # Clean, unambiguous characters (avoid 0/O/Q/D, 1/I/L, 8/B, S/5, Z/2, G/6)
+    chars = "2345679ACEFHKMNPRTWXY"
     text = "".join(random.choices(chars, k=text_length))
 
-    width = 170
+    width = 220
     height = 54
-    # Light-grey noisy background
-    bg_color = (random.randint(230, 245), random.randint(235, 248), random.randint(240, 252))
-    img = Image.new("RGB", (width, height), color=bg_color)
+    # Clean light background (slate-50)
+    img = Image.new("RGB", (width, height), color=(248, 250, 252))
     draw = ImageDraw.Draw(img)
 
-    # 1. Background noise dots
-    for _ in range(400):
-        xy = (random.randint(0, width - 1), random.randint(0, height - 1))
-        dot_color = (random.randint(180, 220), random.randint(180, 220), random.randint(180, 220))
-        draw.point(xy, fill=dot_color)
+    # 1. Subtle, clean reference guide lines (light slate)
+    for y_pos in [14, 27, 40]:
+        draw.line([(0, y_pos), (width, y_pos)], fill=(226, 232, 240), width=1)
+    for x_pos in [44, 88, 132, 176]:
+        draw.line([(x_pos, 0), (x_pos, height)], fill=(238, 242, 246), width=1)
 
-    # 2. Random interference lines
-    for _ in range(6):
-        start = (random.randint(0, width), random.randint(0, height))
-        end = (random.randint(0, width), random.randint(0, height))
-        line_color = (random.randint(140, 200), random.randint(140, 200), random.randint(150, 210))
-        draw.line([start, end], fill=line_color, width=random.randint(1, 2))
+    # 2. Try loading bold TrueType fonts with fallbacks
+    font = None
+    for fn in ["arialbd.ttf", "arial.ttf", "calibrib.ttf", "calibri.ttf", "DejaVuSans-Bold.ttf", "DejaVuSans.ttf"]:
+        try:
+            font = ImageFont.truetype(fn, 32)
+            break
+        except Exception:
+            continue
+    if font is None:
+        try:
+            font = ImageFont.load_default(size=28)
+        except TypeError:
+            font = ImageFont.load_default()
 
-    # Load default font
-    try:
-        font = ImageFont.load_default(size=26)
-    except TypeError:
-        # For older Pillow versions that don't support size in load_default
-        font = ImageFont.load_default()
-
-    # Draw individual characters with slight rotation & positioning jitter
-    char_spacing = (width - 30) // text_length
+    # 3. Draw each character clearly with even spacing and high contrast
+    char_spacing = (width - 40) // text_length
     for i, char in enumerate(text):
-        x = 16 + i * char_spacing + random.randint(-3, 3)
-        y = 12 + random.randint(-4, 4)
+        x = 22 + i * char_spacing + random.randint(-1, 1)
+        y = 10 + random.randint(-2, 2)
 
-        char_img = Image.new("RGBA", (34, 38), (0, 0, 0, 0))
-        char_draw = ImageDraw.Draw(char_img)
-        # Deep navy / royal blue tones for high contrast & clarity
+        # High-contrast official navy tones (clearly readable against slate-50)
         char_color = (
-            random.randint(11, 40),
-            random.randint(40, 80),
-            random.randint(120, 180),
-            255,
+            random.randint(11, 25),
+            random.randint(50, 75),
+            random.randint(145, 175),
         )
-        char_draw.text((4, 2), char, font=font, fill=char_color)
+        draw.text((x, y), char, font=font, fill=char_color)
 
-        # Rotate character slightly (-15 to 15 degrees)
-        angle = random.randint(-18, 18)
-        rotated_char = char_img.rotate(angle, expand=True, resample=Image.BICUBIC)
-
-        img.paste(rotated_char, (x, y), rotated_char)
-
-    # 3. Add foreground wavy lines
-    for _ in range(2):
-        points = [
-            (0, random.randint(10, height - 10)),
-            (width // 3, random.randint(10, height - 10)),
-            (2 * width // 3, random.randint(10, height - 10)),
-            (width, random.randint(10, height - 10)),
-        ]
-        draw.line(points, fill=(245, 130, 32, 180), width=1)
-
-    # Subtle smooth filter to blend noise
-    img = img.filter(ImageFilter.SMOOTH_MORE)
-
-    # Convert to base64
+    # 4. Convert to base64 PNG data URI
     buffer = io.BytesIO()
     img.save(buffer, format="PNG")
     b64_str = base64.b64encode(buffer.getvalue()).decode("utf-8")

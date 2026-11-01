@@ -1,3 +1,4 @@
+import { DataTable, ColumnDef } from '../../components/DataTable';
 import React, { useState, useEffect } from 'react';
 import {
   BarChart3,
@@ -5,7 +6,6 @@ import {
   FileText,
   Download,
   Loader2,
-  Sparkles,
   CheckCircle,
 } from 'lucide-react';
 import { instituteApi, ReportItem, ApplicationItem } from '../../api/institute';
@@ -72,30 +72,20 @@ export const ReportsPage: React.FC = () => {
     }
   };
 
-  const formatBytes = (bytes: number) => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
-  };
-
+  
   const pdfCount = reports.filter((r) => r.format === 'PDF').length;
   const csvCount = reports.filter((r) => r.format === 'CSV').length;
 
   return (
     <div className="space-y-6 animate-fade-in pb-12">
       {/* Page Header Card */}
-      <div className="bg-white rounded-[12px] p-6 shadow-[0_6px_18px_rgba(0,0,0,0.18)] border border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2.5">
-            <BarChart3 size={22} className="text-[#0B3C9D]" />
-            <h2 className="text-xl font-bold text-[#0B3C9D] tracking-tight">
-              Statutory Reports & Regulatory Export
-            </h2>
-          </div>
-          <p className="text-xs text-slate-500 mt-1">
-            Generate authenticated PDF transcripts and CSV archives for institutional auditing and council visits.
+          <h1 className="text-xl font-bold text-slate-900 tracking-tight">
+            Reports
+          </h1>
+          <p className="text-sm text-slate-600 mt-1">
+            Generate PDF transcripts and compliance export archives.
           </p>
         </div>
       </div>
@@ -103,19 +93,19 @@ export const ReportsPage: React.FC = () => {
       {/* Stat Cards Row */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
         <StatCard
-          label="Total Reports Generated"
+          label="Total reports generated"
           value={reports.length}
           icon={<BarChart3 size={28} />}
           tint="blue"
         />
         <StatCard
-          label="PDF Transcripts"
+          label="PDF transcripts"
           value={pdfCount}
           icon={<FileText size={28} />}
           tint="amber"
         />
         <StatCard
-          label="CSV Data Sheets"
+          label="CSV data sheets"
           value={csvCount}
           icon={<FileSpreadsheet size={28} />}
           tint="green"
@@ -124,11 +114,10 @@ export const ReportsPage: React.FC = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Left Form: Choose report type, date range, format & Generate */}
-        <div className="lg:col-span-5 bg-white rounded-[12px] p-6 shadow-[0_6px_18px_rgba(0,0,0,0.18)] border border-slate-100">
-          <div className="flex items-center gap-2 pb-4 border-b border-slate-100">
-            <Sparkles size={20} className="text-[#F58220]" />
-            <h3 className="text-base font-bold text-[#0F2A5C] tracking-tight">
-              Generate Regulatory Report
+        <div className="lg:col-span-5 bg-white rounded-lg p-6 shadow-sm border border-slate-200">
+          <div className="pb-4 border-b border-slate-100">
+            <h3 className="text-sm font-semibold text-slate-900">
+              Generate report
             </h3>
           </div>
 
@@ -230,105 +219,114 @@ export const ReportsPage: React.FC = () => {
             <button
               type="submit"
               disabled={isGenerating}
-              className="w-full h-11 bg-[#F58220] hover:bg-[#E06F0F] text-white font-semibold rounded-[6px] transition-colors flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 select-none mt-2"
+              className="w-full h-10 bg-[#F58220] hover:bg-[#E06F0F] text-white font-semibold rounded-lg transition-colors flex items-center justify-center gap-2 shadow-sm disabled:bg-slate-300 disabled:text-slate-600 disabled:cursor-not-allowed select-none mt-2 text-xs"
             >
               {isGenerating ? (
                 <>
                   <Loader2 size={16} className="animate-spin" />
-                  <span>Compiling Real Document via ReportLab...</span>
+                  <span>Generating report...</span>
                 </>
               ) : (
-                <span>Generate Official Export</span>
+                <span>Generate report</span>
               )}
             </button>
           </form>
         </div>
 
-        {/* Right Table: List of Generated Reports with Download Buttons */}
-        <div className="lg:col-span-7 bg-white rounded-[12px] p-6 shadow-[0_6px_18px_rgba(0,0,0,0.18)] border border-slate-100">
-          <h3 className="text-base font-bold text-[#0B3C9D] pb-4 border-b border-slate-100 tracking-tight">
-            Generated Reports Archive ({reports.length})
+        {/* Right Table: List of Generated Reports */}
+        <div className="lg:col-span-7 bg-white rounded-xl p-6 shadow-sm border border-slate-200">
+          <h3 className="text-sm font-semibold text-slate-900 pb-4 border-b border-slate-100">
+            Reports archive ({reports.length})
           </h3>
 
-          <div className="overflow-x-auto mt-4">
-            <table className="w-full text-left border-collapse text-xs">
-              <thead>
-                <tr className="bg-[#E3F0FF] text-[#0B3C9D] uppercase text-[11px] font-bold tracking-wider">
-                  <th className="py-3 px-3.5 rounded-l-md">Report ID</th>
-                  <th className="py-3 px-3.5">Application</th>
-                  <th className="py-3 px-3.5">Report Title</th>
-                  <th className="py-3 px-3.5">Language</th>
-                  <th className="py-3 px-3.5">Generated By</th>
-                  <th className="py-3 px-3.5">Date</th>
-                  <th className="py-3 px-3.5 text-center rounded-r-md">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
-                {isLoading ? (
-                  <tr>
-                    <td colSpan={7} className="py-12 text-center text-slate-400">
-                      <Loader2 size={24} className="animate-spin mx-auto mb-2 text-[#F58220]" />
-                      Loading reports...
-                    </td>
-                  </tr>
-                ) : reports.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="py-10 text-center text-slate-400">
-                      No reports generated yet. Use the generator on the left to export official transcripts.
-                    </td>
-                  </tr>
-                ) : (
-                  reports.map((rep) => (
-                    <tr key={rep.id} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="py-3.5 px-3.5 font-mono font-bold text-[#0B3C9D] whitespace-nowrap">
-                        #{rep.id}
-                      </td>
-                      <td className="py-3.5 px-3.5 font-mono text-slate-700 whitespace-nowrap">
-                        {rep.application_id || <span className="text-slate-400 italic">General</span>}
-                      </td>
-                      <td className="py-3.5 px-3.5 font-bold text-[#0F2A5C] max-w-[160px] truncate">
-                        <div className="flex items-center gap-1.5">
-                          <span>{rep.report_type}</span>
-                          <span
-                            className={`px-1.5 py-0.2 rounded text-[9px] font-bold ${
-                              rep.format === 'PDF'
-                                ? 'bg-amber-100 text-amber-800'
-                                : 'bg-emerald-100 text-emerald-800'
-                            }`}
-                          >
-                            {rep.format}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="py-3.5 px-3.5 whitespace-nowrap">
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700 uppercase">
-                          {rep.language || 'EN'}
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-3.5 text-slate-600 max-w-[120px] truncate text-[11px]">
-                        {rep.generated_by || 'INSTITUTE'}
-                      </td>
-                      <td className="py-3.5 px-3.5 whitespace-nowrap text-slate-500">
+          <div className="mt-4">
+            {(() => {
+              const columns: ColumnDef<ReportItem>[] = [
+                {
+                  key: 'report_id',
+                  header: 'Report',
+                  width: '18%',
+                  align: 'left',
+                  render: (rep) => (
+                    <div>
+                      <div className="font-mono font-medium text-[#0B3C9D] text-xs">#{rep.id}</div>
+                      <div className="text-[10px] text-slate-600 font-mono">
+                        {rep.application_id || 'General'}
+                      </div>
+                    </div>
+                  ),
+                },
+                {
+                  key: 'title_format',
+                  header: 'Title & format',
+                  width: '36%',
+                  align: 'left',
+                  render: (rep) => (
+                    <div>
+                      <div className="font-medium text-slate-900 text-xs line-clamp-2" title={rep.report_type}>
+                        {rep.report_type}
+                      </div>
+                      <div className="text-[10px] text-slate-600 uppercase font-bold tracking-wider mt-0.5">
+                        {rep.format}
+                      </div>
+                    </div>
+                  ),
+                },
+                {
+                  key: 'language',
+                  header: 'Language',
+                  width: '12%',
+                  align: 'left',
+                  render: (rep) => (
+                    <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-700 uppercase">
+                      {rep.language}
+                    </span>
+                  ),
+                },
+                {
+                  key: 'date_size',
+                  header: 'Date & size',
+                  width: '18%',
+                  align: 'left',
+                  render: (rep) => (
+                    <div>
+                      <div className="text-xs text-slate-700">
                         {new Date(rep.created_at).toLocaleDateString('en-GB')}
-                        <span className="block text-[10px] text-slate-400 font-mono">
-                          {formatBytes(rep.file_size)}
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-3.5 text-center">
-                        <button
-                          onClick={() => instituteApi.downloadReportFile(rep.id, rep.filename)}
-                          className="px-3 py-1.5 bg-[#0B3C9D] hover:bg-[#092E7A] text-white rounded-[6px] text-xs font-semibold inline-flex items-center gap-1.5 transition-colors cursor-pointer select-none"
-                          title="Download stored report transcript"
-                        >
-                          <Download size={12} />
-                          <span>Download</span>
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                      </div>
+                      <div className="text-[10px] text-slate-600">
+                        {rep.file_size ? `${Math.round(rep.file_size / 1024)} KB` : 'Ready'}
+                      </div>
+                    </div>
+                  ),
+                },
+                {
+                  key: 'action',
+                  header: 'Action',
+                  width: '16%',
+                  align: 'right',
+                  render: (rep) => (
+                    <button
+                      onClick={() => instituteApi.downloadReportFile(rep.id, rep.filename)}
+                      className="px-2.5 py-1 bg-white border border-slate-300 hover:border-[#0B3C9D] text-slate-700 rounded text-xs font-semibold inline-flex items-center gap-1 shadow-2xs transition-colors"
+                    >
+                      <Download size={11} />
+                      <span>Download</span>
+                    </button>
+                  ),
+                },
+              ];
+
+              return (
+                <DataTable
+                  columns={columns}
+                  data={reports}
+                  keyExtractor={(rep) => rep.id}
+                  isLoading={isLoading}
+                  emptyMessage="No reports yet."
+                  isLong={reports.length > 12}
+                />
+              );
+            })()}
           </div>
         </div>
       </div>

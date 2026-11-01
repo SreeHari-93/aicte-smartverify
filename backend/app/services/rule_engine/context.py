@@ -10,6 +10,7 @@ class EvaluationContext(BaseModel):
     """
     application: Dict[str, Any] = Field(default_factory=dict)
     institute: Dict[str, Any] = Field(default_factory=dict)
+    infrastructure: Dict[str, Any] = Field(default_factory=dict)
     documents: List[Dict[str, Any]] = Field(default_factory=list)
     courses: List[Dict[str, Any]] = Field(default_factory=list)
     complaints: List[Dict[str, Any]] = Field(default_factory=list)

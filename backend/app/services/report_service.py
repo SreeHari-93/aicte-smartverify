@@ -779,6 +779,101 @@ class ReportService:
         elements.append(Spacer(1, 8))
 
         # ---------------------------------------------------------
+        # 2B. Infrastructure Compliance Table (Required vs Provided vs Result)
+        # ---------------------------------------------------------
+        from backend.app.models.infrastructure import InfrastructureDetail
+        infra_record = None
+        if app:
+            infra_record = db.query(InfrastructureDetail).filter(InfrastructureDetail.application_id == app.id).first()
+            if not infra_record and app.institute_id:
+                infra_record = db.query(InfrastructureDetail).filter(InfrastructureDetail.institute_id == app.institute_id).order_by(InfrastructureDetail.id.desc()).first()
+
+        infra_findings = {f.rule_code: f for f in findings if f.rule_code.startswith("INFRA-")}
+
+        infra_sec_title = "बुनियादी ढांचा अनुपालन (Infrastructure Compliance)" if is_hindi else "Infrastructure Compliance (APH 2026-27 Norms)"
+        elements.append(Paragraph(infra_sec_title, sec_head_style))
+
+        def _get_infra_res_cell(code: str, default_pass: bool):
+            f = infra_findings.get(code)
+            if f:
+                st = f.status.upper()
+                if st == "PASS":
+                    return Paragraph('<font color="#15803D"><b>PASS</b></font>', body_p_style)
+                elif st == "NEEDS_REVIEW":
+                    return Paragraph('<font color="#B45309"><b>NOT PROVIDED</b></font>', body_p_style)
+                else:
+                    return Paragraph('<font color="#B91C1C"><b>FAIL</b></font>', body_p_style)
+            if not infra_record:
+                return Paragraph('<font color="#B45309"><b>NOT PROVIDED</b></font>', body_p_style)
+            return Paragraph('<font color="#15803D"><b>PASS</b></font>' if default_pass else '<font color="#B91C1C"><b>FAIL</b></font>', body_p_style)
+
+        infra_rows = []
+        if infra_record:
+            infra_specs = [
+                ("Built-up Area per Intake", ">= 4.0 sq m/student", f"{infra_record.built_up_area_per_intake} sq m ({infra_record.total_built_up_area:,.0f} m² / {infra_record.total_sanctioned_intake})", "INFRA-BUILTUP-PER-INTAKE", infra_record.built_up_area_per_intake >= 4.0),
+                ("Instructional Classrooms", ">= 16 classrooms", f"{infra_record.classroom_count} classrooms", "INFRA-CLASSROOM-COUNT", infra_record.classroom_count >= 16),
+                ("Average Classroom Area", ">= 66.0 sq m", f"{infra_record.average_classroom_area} sq m", "INFRA-CLASSROOM-AVG-AREA", infra_record.average_classroom_area >= 66.0),
+                ("Laboratories & Workshops", ">= 20 laboratories", f"{infra_record.laboratory_count} laboratories", "INFRA-LABORATORY-COUNT", infra_record.laboratory_count >= 20),
+                ("Central Library Area", ">= 400.0 sq m", f"{infra_record.library_area} sq m", "INFRA-LIBRARY-AREA", infra_record.library_area >= 400.0),
+                ("Library Books Repository", ">= 10,000 volumes", f"{infra_record.library_books_count:,} volumes", "INFRA-LIBRARY-BOOKS", infra_record.library_books_count >= 10000),
+                ("Faculty-to-Student Ratio", "<= 20:1", f"{infra_record.faculty_student_ratio}:1 ({infra_record.student_count} stud / {infra_record.faculty_count} fac)", "INFRA-FACULTY-STUDENT-RATIO", infra_record.faculty_student_ratio <= 20.0 and infra_record.faculty_student_ratio > 0),
+                ("Computer-to-Student Ratio", ">= 0.20 (1:5)", f"{infra_record.computer_student_ratio:.3f} ({infra_record.computers_available} term / {infra_record.student_count} stud)", "INFRA-COMPUTER-STUDENT-RATIO", infra_record.computer_student_ratio >= 0.20),
+                ("Barrier-Free (Divyangjan)", "Installed / Certified", "Yes (Installed)" if infra_record.barrier_free_facilities else "No (Not Provided)", "INFRA-BARRIER-FREE", bool(infra_record.barrier_free_facilities)),
+                ("Fire Safety Equipment", "Installed / Certified", "Yes (Installed)" if infra_record.fire_safety_installed else "No (Not Provided)", "INFRA-FIRE-SAFETY", bool(infra_record.fire_safety_installed)),
+            ]
+            for param, req, prov, code, d_pass in infra_specs:
+                infra_rows.append([
+                    Paragraph(f"<b>{param}</b>", body_p_style),
+                    Paragraph(req, body_p_style),
+                    Paragraph(prov, body_p_style),
+                    _get_infra_res_cell(code, d_pass),
+                ])
+        else:
+            default_params = [
+                ("Built-up Area per Intake", ">= 4.0 sq m/student", "INFRA-BUILTUP-PER-INTAKE"),
+                ("Instructional Classrooms", ">= 16 classrooms", "INFRA-CLASSROOM-COUNT"),
+                ("Average Classroom Area", ">= 66.0 sq m", "INFRA-CLASSROOM-AVG-AREA"),
+                ("Laboratories & Workshops", ">= 20 laboratories", "INFRA-LABORATORY-COUNT"),
+                ("Central Library Area", ">= 400.0 sq m", "INFRA-LIBRARY-AREA"),
+                ("Library Books Repository", ">= 10,000 volumes", "INFRA-LIBRARY-BOOKS"),
+                ("Faculty-to-Student Ratio", "<= 20:1", "INFRA-FACULTY-STUDENT-RATIO"),
+                ("Computer-to-Student Ratio", ">= 0.20 (1:5)", "INFRA-COMPUTER-STUDENT-RATIO"),
+                ("Barrier-Free (Divyangjan)", "Installed / Certified", "INFRA-BARRIER-FREE"),
+                ("Fire Safety Equipment", "Installed / Certified", "INFRA-FIRE-SAFETY"),
+            ]
+            for param, req, code in default_params:
+                infra_rows.append([
+                    Paragraph(f"<b>{param}</b>", body_p_style),
+                    Paragraph(req, body_p_style),
+                    Paragraph('<font color="#64748B">Not provided</font>', body_p_style),
+                    _get_infra_res_cell(code, False),
+                ])
+
+        infra_table_data = [
+            [
+                Paragraph("<b>Parameter / Metric</b>", find_bold_style),
+                Paragraph("<b>Prescribed Norm (Required)</b>", find_bold_style),
+                Paragraph("<b>Reported Data (Provided)</b>", find_bold_style),
+                Paragraph("<b>Compliance Result</b>", find_bold_style),
+            ]
+        ] + infra_rows
+
+        infra_table = Table(infra_table_data, colWidths=[145, 115, 160, 103])
+        infra_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#F1F5F9')),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 4),
+            ('TOPPADDING', (0, 0), (-1, 0), 4),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8FAFC')]),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 3),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 3),
+        ]))
+        elements.append(infra_table)
+        elements.append(Spacer(1, 8))
+
+        # ---------------------------------------------------------
         # 6. Document Table with Extracted Fields, Expiry & Verification Status
         # ---------------------------------------------------------
         doc_table_title = "3. प्रस्तुत दस्तावेज, निष्कर्षित फील्ड एवं सत्यापन स्थिति" if is_hindi else "3. Statutory Document Verification Scrutiny & Extracted Fields"

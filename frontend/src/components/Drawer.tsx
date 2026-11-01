@@ -27,10 +27,10 @@ export const Drawer: React.FC<DrawerProps> = ({
       document.body.style.overflow = 'hidden';
       window.addEventListener('keydown', handleKeyDown);
     } else {
-      document.body.style.overflow = 'auto';
+      document.body.style.overflow = 'hidden';
     }
     return () => {
-      document.body.style.overflow = 'auto';
+      document.body.style.overflow = 'hidden';
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [isOpen, onClose]);
@@ -39,16 +39,16 @@ export const Drawer: React.FC<DrawerProps> = ({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[1000] flex justify-end bg-black/50 backdrop-blur-xs animate-fade-in"
+      className="fixed inset-x-0 bottom-0 top-24 z-[1000] flex justify-end bg-black/35 backdrop-blur-none animate-fade-in"
       role="dialog"
       aria-modal="true"
     >
       {/* Clicking backdrop closes the drawer */}
-      <div className="fixed inset-0" onClick={onClose} aria-hidden="true" />
+      <div className="fixed inset-x-0 bottom-0 top-24" onClick={onClose} aria-hidden="true" />
 
-      {/* Drawer Dialog: offset by top bar height */}
+      {/* Drawer Dialog: starts below top bar */}
       <div
-        className={`relative z-10 w-full ${width} bg-white shadow-2xl flex flex-col border-l border-slate-200 animate-slide-left overflow-hidden admin-drawer-offset`}
+        className={`relative z-10 w-full ${width} bg-white shadow-2xl flex flex-col border-l border-slate-200 animate-slide-left overflow-hidden h-full`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Sticky Fixed Header */}
@@ -60,7 +60,7 @@ export const Drawer: React.FC<DrawerProps> = ({
           <button
             onClick={onClose}
             aria-label="Close drawer"
-            className="shrink-0 p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer relative z-30"
+            className="shrink-0 p-2 text-slate-600 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer relative z-30"
           >
             <X size={20} />
           </button>
@@ -68,6 +68,17 @@ export const Drawer: React.FC<DrawerProps> = ({
 
         {/* Scrollable Middle Body */}
         <div className="flex-1 min-h-0 overflow-y-auto px-6 sm:px-8 py-5 sm:py-6 modal-scroll">{children}</div>
+
+        {/* Sticky Fixed Footer */}
+        <div className="shrink-0 px-6 sm:px-8 py-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+          <span className="text-xs text-slate-600 font-medium">AICTE Regulatory Portal</span>
+          <button
+            onClick={onClose}
+            className="px-3.5 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-semibold rounded-lg transition-colors cursor-pointer"
+          >
+            Close
+          </button>
+        </div>
       </div>
     </div>,
     document.body

@@ -42,6 +42,7 @@ class UserResponse(BaseModel):
     email: str
     role: str
     is_active: bool
+    region: Optional[str] = None
     institute: Optional[InstituteInfo] = None
 
     class Config:

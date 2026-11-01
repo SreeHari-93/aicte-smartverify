@@ -1,665 +1,599 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
-  Cpu,
-  Play,
-  FileSpreadsheet,
-  FileText,
-  CheckCircle2,
-  ArrowUpRight,
-  ArrowDownRight,
-  Clock,
-  Loader2,
   RefreshCw,
-  Search,
-  Eye,
-  GitCommit,
-  Info,
-  ShieldCheck,
-  ThumbsUp,
+  CheckCircle2,
+  Play,
+  Check,
+  AlertTriangle,
+  History,
+  TrendingUp,
+  TrendingDown,
+  Minus,
+  Clock,
+  RotateCcw,
 } from 'lucide-react';
-import { adminApi, EvaluationRunData, FeedbackStatsData } from '../../api/admin';
-import { Modal } from '../../components/Modal';
+import { apiClient } from '../../api/client';
+import { DataTable, ColumnDef } from '../../components/DataTable';
+
+interface ScenarioItem {
+  dimension: string;
+  score: number;
+  unit: string;
+  status: 'PASSED' | 'FAILED' | 'WARNING';
+  details: string;
+  failure_reason?: string | null;
+  test_cases: string[];
+}
+
+interface RecentRunItem {
+  id: number;
+  evaluated_at: string;
+  overall_result: number;
+  duration_seconds: number;
+  status: string;
+}
+
+interface EvaluationResponse {
+  id: number;
+  overall_accuracy: number;
+  note: string;
+  evaluated_at: string;
+  duration_seconds: number;
+  scenarios: ScenarioItem[];
+  previous_run?: {
+    id: number;
+    overall_accuracy: number;
+    evaluated_at: string;
+    dimension_scores: Record<string, number>;
+  } | null;
+  recent_runs: RecentRunItem[];
+  active_run?: {
+    id: number;
+    status: string;
+    progress_step: number;
+    progress_total: number;
+    progress_text: string;
+  } | null;
+}
+
+const getPlainDimensionName = (name: string): string => {
+  const n = name.toLowerCase();
+  if (n.includes('routing')) return 'Routing accuracy';
+  if (n.includes('deadline')) return 'Deadline accuracy';
+  if (n.includes('timeliness')) return 'Alert timeliness';
+  if (n.includes('duplicate')) return 'Duplicate alerts';
+  if (n.includes('escalation correctness') || n.includes('escalation accuracy') || n.includes('escalation')) return 'Escalation accuracy';
+  if (n.includes('audit')) return 'Audit completeness';
+  if (n.includes('return') || n.includes('resubmit')) return 'Return and resubmit';
+  if (n.includes('late renewal') || n.includes('renewal')) return 'Renewal escalation';
+  return name;
+};
+
+const formatPlainWording = (text: string): string => {
+  if (!text) return '';
+  return text
+    .replace(/STAGE_DUE_SOON/g, 'Stage due soon')
+    .replace(/UNDERTAKING_DUE_SOON/g, 'Undertaking due soon')
+    .replace(/DOCUMENT_EXPIRING/g, 'Document expiring')
+    .replace(/T-90/g, '90 days before')
+    .replace(/T-60/g, '60 days before')
+    .replace(/T-30/g, '30 days before')
+    .replace(/T-7/g, '7 days before')
+    .replace(/T-2/g, '2 days before')
+    .replace(/SCRUTINY_EVC/g, 'Scrutiny + EVC')
+    .replace(/ONLY_SCRUTINY/g, 'Scrutiny only')
+    .replace(/ONLY_EVC/g, 'EVC only')
+    .replace(/EVC_SAC_SHC/g, 'EVC + SAC / SHC review')
+    .replace(/\b3d\b/g, '3 days')
+    .replace(/\b7d\b/g, '7 days')
+    .replace(/\b14d\b/g, '14 days');
+};
+
+const formatDateTime = (isoString?: string): string => {
+  if (!isoString) return '—';
+  try {
+    const d = new Date(isoString);
+    if (isNaN(d.getTime())) return isoString;
+    const day = String(d.getDate()).padStart(2, '0');
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const year = d.getFullYear();
+    const hours = String(d.getHours()).padStart(2, '0');
+    const mins = String(d.getMinutes()).padStart(2, '0');
+    return `${day}-${month}-${year} ${hours}:${mins}`;
+  } catch {
+    return isoString;
+  }
+};
 
 export const AdminEvaluationPage: React.FC = () => {
-  const [runs, setRuns] = useState<EvaluationRunData[]>([]);
-  const [selectedRun, setSelectedRun] = useState<EvaluationRunData | null>(null);
-  const [feedbackStats, setFeedbackStats] = useState<FeedbackStatsData | null>(null);
+  const [evalData, setEvalData] = useState<EvaluationResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isRunningEval, setIsRunningEval] = useState(false);
-  const [failedCasesSearch, setFailedCasesSearch] = useState('');
-  const [previewCase, setPreviewCase] = useState<{
-    filename: string;
-    doc_type: string;
-    failures: string[];
-    details: Record<string, any>;
-  } | null>(null);
+  const [isRunning, setIsRunning] = useState(false);
+  const [progressText, setProgressText] = useState<string>('');
+  const [errorReason, setErrorReason] = useState<string | null>(null);
+  const [successToast, setSuccessToast] = useState<string | null>(null);
 
-  // Compare with previous run if available
-  const currentRunIndex = runs.findIndex((r) => r.id === selectedRun?.id);
-  const previousRun = currentRunIndex >= 0 && currentRunIndex < runs.length - 1 ? runs[currentRunIndex + 1] : null;
+  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const loadData = async () => {
+  const stopPolling = () => {
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      stopPolling();
+    };
+  }, []);
+
+  const loadEvaluation = async () => {
     setIsLoading(true);
+    setErrorReason(null);
     try {
-      const [runsData, stats] = await Promise.all([
-        adminApi.listEvaluationRuns(20),
-        adminApi.getFeedbackStats(),
-      ]);
-      setRuns(runsData);
-      setFeedbackStats(stats);
-      if (runsData.length > 0 && !selectedRun) {
-        setSelectedRun(runsData[0]);
-      } else if (runsData.length > 0 && selectedRun) {
-        const found = runsData.find((r: EvaluationRunData) => r.id === selectedRun.id);
-        setSelectedRun(found || runsData[0]);
+      const res = await apiClient.get<EvaluationResponse>('/api/evaluation/synthetic-scenarios');
+      const data = res.data;
+      setEvalData(data);
+
+      // If a run is actively executing on the server, resume polling
+      if (data.active_run && data.active_run.status === 'RUNNING') {
+        setIsRunning(true);
+        setProgressText(data.active_run.progress_text || 'Checking scenarios...');
+        startPolling();
+      } else {
+        setIsRunning(false);
+        setProgressText('');
+        stopPolling();
       }
-    } catch (err) {
-      console.error('Failed to load evaluation runs:', err);
+    } catch (err: any) {
+      console.error('Failed to load evaluation results:', err);
+      setErrorReason(err.response?.data?.detail || err.message || 'Failed to load evaluation metrics.');
     } finally {
       setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    loadData();
+    loadEvaluation();
   }, []);
 
+  const startPolling = () => {
+    stopPolling();
+    pollIntervalRef.current = setInterval(async () => {
+      try {
+        const res = await apiClient.get<EvaluationResponse>('/api/evaluation/synthetic-scenarios');
+        const data = res.data;
+
+        if (data.active_run && data.active_run.status === 'RUNNING') {
+          setProgressText(data.active_run.progress_text || 'Checking scenarios...');
+        } else {
+          // Completed
+          stopPolling();
+          setEvalData(data);
+          setIsRunning(false);
+          setProgressText('');
+          setSuccessToast('Evaluation complete');
+          setTimeout(() => setSuccessToast(null), 4000);
+        }
+      } catch (err: any) {
+        console.error('Polling error:', err);
+        stopPolling();
+        setIsRunning(false);
+        setErrorReason(err.response?.data?.detail || err.message || 'Error occurred while checking evaluation run.');
+      }
+    }, 1000);
+  };
+
   const handleRunEvaluation = async () => {
-    if (isRunningEval) return;
-    setIsRunningEval(true);
+    if (isRunning) return; // Prevent double trigger
+    setIsRunning(true);
+    setErrorReason(null);
+    setProgressText('Initiating evaluation suite...');
+
     try {
-      const newRun = await adminApi.triggerEvaluationRun();
-      await loadData();
-      setSelectedRun(newRun);
+      const res = await apiClient.post('/api/evaluation/trigger-scenarios');
+      const data = res.data;
+
+      if (data.active_run) {
+        setProgressText(data.active_run.progress_text || 'Checking scenario 1 of 8...');
+      }
+
+      startPolling();
     } catch (err: any) {
-      alert(err.response?.data?.detail || 'Failed to trigger evaluation run.');
-    } finally {
-      setIsRunningEval(false);
+      console.error('Trigger evaluation error:', err);
+      setIsRunning(false);
+      setProgressText('');
+      setErrorReason(err.response?.data?.detail || err.message || 'Failed to re-run evaluation suite.');
     }
   };
-
-  const handleDownloadCsv = async () => {
-    if (!selectedRun) return;
-    try {
-      await adminApi.downloadEvaluationCsv(selectedRun.id);
-    } catch (err) {
-      alert('Failed to export CSV.');
-    }
-  };
-
-  const handleDownloadPdf = async () => {
-    if (!selectedRun) return;
-    try {
-      await adminApi.downloadEvaluationPdf(selectedRun.id);
-    } catch (err) {
-      alert('Failed to export summary PDF.');
-    }
-  };
-
-  // Delta helpers
-  const calcDelta = (currentVal?: number, prevVal?: number) => {
-    if (currentVal === undefined || prevVal === undefined) return null;
-    const diff = currentVal - prevVal;
-    return Math.round(diff * 10) / 10;
-  };
-
-  const metrics = selectedRun?.metrics_json;
-  const classification = metrics?.classification;
-  const fieldExtraction = metrics?.field_extraction;
-  const anomalyDetectors = metrics?.anomaly_detectors;
-  const explainer = metrics?.explainer_grounding;
-
-  // Filtered failed cases
-  const failedCases = (selectedRun?.failed_cases_json || []).filter((fc) => {
-    if (!failedCasesSearch) return true;
-    const q = failedCasesSearch.toLowerCase();
-    return (
-      fc.filename.toLowerCase().includes(q) ||
-      fc.doc_type.toLowerCase().includes(q) ||
-      fc.failures.some((f) => f.toLowerCase().includes(q))
-    );
-  });
 
   return (
-    <div className="space-y-6 pb-14 animate-fade-in">
-      {/* Header Banner */}
-      <div className="bg-white rounded-[12px] p-6 shadow-[0_6px_18px_rgba(0,0,0,0.18)] border border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="bg-white rounded-xl p-6 border border-slate-200 shadow-sm flex flex-wrap items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2.5">
-            <Cpu size={24} className="text-[#0B3C9D]" />
-            <h1 className="text-xl font-bold text-[#0B3C9D] tracking-tight">
-              AI Evaluation & Model Governance Metrics
-            </h1>
-          </div>
-          <p className="text-xs text-slate-500 mt-1">
-            Standardised benchmark evaluation across OCR, Document Classification, Field Extraction, and Anomaly Detectors.
+          <h1 className="text-xl font-bold tracking-tight text-slate-900">
+            Evaluation
+          </h1>
+          <p className="text-sm text-slate-600 mt-1">
+            Benchmark accuracy across workflow scenarios.
           </p>
         </div>
 
-        {/* Actions */}
-        <div className="flex items-center gap-3">
-          <button
-            onClick={loadData}
-            disabled={isLoading}
-            className="p-2.5 text-slate-500 hover:text-[#0B3C9D] hover:bg-slate-50 rounded-lg transition-colors border border-slate-200"
-            title="Refresh runs"
-          >
-            <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />
-          </button>
-
+        <div className="flex items-center gap-2">
           <button
             onClick={handleRunEvaluation}
-            disabled={isRunningEval}
-            className="h-10 px-5 bg-[#0B3C9D] hover:bg-[#092E7A] text-white font-bold rounded-lg text-xs flex items-center gap-2 transition-all shadow-sm disabled:opacity-50"
+            disabled={isRunning}
+            className="flex items-center gap-2 px-4 py-2 bg-[#0B3C9D] hover:bg-[#082b70] text-white text-xs font-bold rounded-lg shadow-sm transition-colors disabled:bg-slate-300 disabled:text-slate-600 disabled:cursor-not-allowed"
           >
-            {isRunningEval ? (
-              <>
-                <Loader2 size={16} className="animate-spin text-white" />
-                <span>Running Pipeline Benchmark...</span>
-              </>
-            ) : (
-              <>
-                <Play size={16} fill="white" />
-                <span>Run Evaluation</span>
-              </>
-            )}
+            <Play size={14} className={isRunning ? 'animate-spin' : ''} />
+            <span>{isRunning ? 'Running…' : 'Re-run evaluation'}</span>
+          </button>
+
+          <button
+            onClick={loadEvaluation}
+            disabled={isLoading || isRunning}
+            className="flex items-center gap-2 px-3.5 py-2 bg-white border border-slate-300 hover:border-[#0B3C9D] text-slate-700 text-xs font-semibold rounded-lg shadow-xs disabled:bg-slate-300 disabled:text-slate-600 disabled:cursor-not-allowed"
+          >
+            <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
+            <span>Refresh</span>
           </button>
         </div>
       </div>
 
-      {/* Mandatory Disclaimer & Wording Standard Banner */}
-      <div className="bg-[#FFF8E6] border border-[#F58220]/30 rounded-[10px] p-4 flex items-start gap-3 text-amber-900 shadow-xs">
-        <Info size={19} className="text-[#F58220] shrink-0 mt-0.5" />
-        <div className="space-y-1">
-          <p className="text-xs font-semibold">
-            Measured on synthetic data. Real-world accuracy must be validated on actual AICTE submissions.
-          </p>
-          <p className="text-[11px] text-amber-800/90 leading-relaxed">
-            AICTE Governance Principle: <span className="font-bold">&quot;Rules decide, AI explains, Officials approve.&quot;</span> Anomaly scores and automated classifications assist human reviewers and do not make unilateral final determinations.
-          </p>
-        </div>
-      </div>
-
-      {/* Run Selector & Metadata Bar */}
-      <div className="bg-white rounded-[12px] p-4 shadow-sm border border-slate-200 flex flex-wrap items-center justify-between gap-4">
-        <div className="flex flex-wrap items-center gap-3">
-          <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">
-            Evaluation Run:
-          </label>
-          <select
-            value={selectedRun?.id || ''}
-            onChange={(e) => {
-              const run = runs.find((r) => r.id === Number(e.target.value));
-              if (run) setSelectedRun(run);
-            }}
-            className="text-xs font-semibold px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#0B3C9D]"
-          >
-            {runs.map((r) => (
-              <option key={r.id} value={r.id}>
-                Run #{r.id} ({new Date(r.started_at).toLocaleString('en-GB')}) — Acc: {r.overall_accuracy.toFixed(1)}% ({r.passed_samples}/{r.total_samples})
-              </option>
-            ))}
-          </select>
-
-          {selectedRun && (
-            <div className="flex items-center gap-2 text-xs text-slate-500">
-              <span className="flex items-center gap-1 bg-slate-100 px-2.5 py-1 rounded-md text-[11px]">
-                <Clock size={12} />
-                <span>{selectedRun.duration_seconds.toFixed(1)}s</span>
+      {/* Live Run Progress Banner */}
+      {isRunning && (
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 shadow-sm flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin shrink-0" />
+            <div>
+              <span className="text-xs font-bold text-blue-900 block">
+                Evaluation in progress
               </span>
-              {selectedRun.git_commit && (
-                <span className="flex items-center gap-1 bg-slate-100 px-2.5 py-1 rounded-md text-[11px] font-mono">
-                  <GitCommit size={12} />
-                  <span>{selectedRun.git_commit.slice(0, 7)}</span>
+              <span className="text-xs text-blue-700 font-medium">
+                {progressText || 'Checking scenarios...'}
+              </span>
+            </div>
+          </div>
+          <span className="text-[11px] font-semibold text-blue-600 bg-blue-100 px-2.5 py-1 rounded-md">
+            Background job active
+          </span>
+        </div>
+      )}
+
+      {/* Success Notification */}
+      {successToast && (
+        <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl p-4 shadow-sm flex items-center gap-2.5 text-xs font-semibold animate-in fade-in duration-200">
+          <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
+          <span>{successToast}</span>
+        </div>
+      )}
+
+      {/* Failure Error Alert with Retry Button */}
+      {errorReason && (
+        <div className="bg-red-50 border border-red-200 rounded-xl p-4 shadow-sm flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <AlertTriangle size={18} className="text-red-600 shrink-0" />
+            <div>
+              <span className="text-xs font-bold text-red-900 block">
+                Evaluation run failed
+              </span>
+              <span className="text-xs text-red-700">{errorReason}</span>
+            </div>
+          </div>
+          <button
+            onClick={handleRunEvaluation}
+            disabled={isRunning}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-lg shadow-sm transition-colors"
+          >
+            <RotateCcw size={13} />
+            <span>Retry</span>
+          </button>
+        </div>
+      )}
+
+      {/* Primary Benchmark Score Banner */}
+      {evalData && (
+        <div className="bg-white rounded-xl p-6 border border-slate-200 shadow-sm flex flex-wrap items-center justify-between gap-6">
+          <div className="space-y-2">
+            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">
+              {evalData.overall_accuracy}% overall accuracy
+            </h2>
+            <p className="text-xs text-slate-600 max-w-xl leading-relaxed">
+              Scripted scenarios based on the stage rules in this system.
+            </p>
+            <div className="pt-1 flex items-center gap-2 flex-wrap">
+              <span className="text-[11px] font-semibold text-slate-700 bg-slate-100 px-3 py-1 rounded-md border border-slate-200">
+                {evalData.note || 'Measured on synthetic scenarios.'}
+              </span>
+              {evalData.duration_seconds > 0 && (
+                <span className="text-[11px] text-slate-500 font-mono flex items-center gap-1 bg-slate-50 px-2.5 py-1 rounded-md border border-slate-200">
+                  <Clock size={12} />
+                  <span>Duration: {evalData.duration_seconds}s</span>
                 </span>
               )}
-              <span className="bg-blue-50 text-[#0B3C9D] font-bold px-2 py-0.5 rounded text-[10px]">
-                {selectedRun.dataset_version}
+            </div>
+          </div>
+
+          <div className="text-right sm:border-l sm:border-slate-200 sm:pl-8 space-y-1">
+            <span className="text-xs text-slate-600 block font-medium">
+              Evaluated at
+            </span>
+            <span className="text-sm font-mono font-bold text-slate-900 block">
+              {formatDateTime(evalData.evaluated_at)}
+            </span>
+            <div className="text-[11px] text-emerald-600 font-medium flex items-center justify-end gap-1 pt-1">
+              <CheckCircle2 size={13} />
+              <span>
+                {evalData.overall_accuracy === 100
+                  ? 'Zero regressions'
+                  : `${evalData.scenarios.filter((s) => s.status === 'PASSED').length} of ${evalData.scenarios.length} passed`}
               </span>
             </div>
-          )}
-        </div>
-
-        {/* Export Buttons */}
-        {selectedRun && (
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleDownloadCsv}
-              className="h-8 px-3 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-lg flex items-center gap-1.5 transition-colors"
-            >
-              <FileSpreadsheet size={13} className="text-emerald-700" />
-              <span>Export CSV</span>
-            </button>
-            <button
-              onClick={handleDownloadPdf}
-              className="h-8 px-3 text-xs font-semibold text-white bg-[#0B3C9D] hover:bg-[#092E7A] rounded-lg flex items-center gap-1.5 transition-colors shadow-xs"
-            >
-              <FileText size={13} />
-              <span>Summary PDF</span>
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* Key Metric Cards */}
-      {selectedRun && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-          {/* 1. Overall Accuracy */}
-          <div className="bg-white rounded-[12px] p-4 border border-slate-200 shadow-sm relative overflow-hidden">
-            <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-              Overall Accuracy
-            </div>
-            <div className="text-2xl font-black text-[#0B3C9D] mt-1.5">
-              {selectedRun.overall_accuracy.toFixed(1)}%
-            </div>
-            <div className="text-[11px] text-slate-400 mt-0.5">
-              {selectedRun.passed_samples} / {selectedRun.total_samples} passed
-            </div>
-            {previousRun && (
-              <div className="mt-2 text-[10px] font-semibold flex items-center gap-0.5">
-                {selectedRun.overall_accuracy >= previousRun.overall_accuracy ? (
-                  <span className="text-emerald-600 flex items-center">
-                    <ArrowUpRight size={12} />
-                    +{(selectedRun.overall_accuracy - previousRun.overall_accuracy).toFixed(1)}% vs prev
-                  </span>
-                ) : (
-                  <span className="text-red-500 flex items-center">
-                    <ArrowDownRight size={12} />
-                    {(selectedRun.overall_accuracy - previousRun.overall_accuracy).toFixed(1)}% vs prev
-                  </span>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* 2. Classification Macro F1 */}
-          <div className="bg-white rounded-[12px] p-4 border border-slate-200 shadow-sm">
-            <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-              Classification F1
-            </div>
-            <div className="text-2xl font-black text-slate-800 mt-1.5">
-              {classification ? `${(classification.macro_f1 * 100).toFixed(1)}%` : '—'}
-            </div>
-            <div className="text-[11px] text-slate-400 mt-0.5">
-              Acc: {classification ? `${(classification.accuracy * 100).toFixed(1)}%` : '—'}
-            </div>
-            {previousRun?.metrics_json?.classification && classification && (
-              <div className="mt-2 text-[10px] font-semibold flex items-center gap-0.5">
-                {(() => {
-                  const d = calcDelta(classification.macro_f1 * 100, previousRun.metrics_json.classification.macro_f1 * 100);
-                  if (d === null) return null;
-                  return d >= 0 ? (
-                    <span className="text-emerald-600 flex items-center"><ArrowUpRight size={12} />+{d}% vs prev</span>
-                  ) : (
-                    <span className="text-red-500 flex items-center"><ArrowDownRight size={12} />{d}% vs prev</span>
-                  );
-                })()}
-              </div>
-            )}
-          </div>
-
-          {/* 3. Field Match Rate */}
-          <div className="bg-white rounded-[12px] p-4 border border-slate-200 shadow-sm">
-            <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-              Field Match Rate
-            </div>
-            <div className="text-2xl font-black text-slate-800 mt-1.5">
-              {fieldExtraction ? `${(fieldExtraction.overall_normalized_match * 100).toFixed(1)}%` : '—'}
-            </div>
-            <div className="text-[11px] text-slate-400 mt-0.5">
-              Exact: {fieldExtraction ? `${(fieldExtraction.overall_exact_match * 100).toFixed(1)}%` : '—'}
-            </div>
-            {previousRun?.metrics_json?.field_extraction && fieldExtraction && (
-              <div className="mt-2 text-[10px] font-semibold flex items-center gap-0.5">
-                {(() => {
-                  const d = calcDelta(fieldExtraction.overall_normalized_match * 100, previousRun.metrics_json.field_extraction.overall_normalized_match * 100);
-                  if (d === null) return null;
-                  return d >= 0 ? (
-                    <span className="text-emerald-600 flex items-center"><ArrowUpRight size={12} />+{d}% vs prev</span>
-                  ) : (
-                    <span className="text-red-500 flex items-center"><ArrowDownRight size={12} />{d}% vs prev</span>
-                  );
-                })()}
-              </div>
-            )}
-          </div>
-
-          {/* 4. Anomaly Detector FPR */}
-          <div className="bg-white rounded-[12px] p-4 border border-slate-200 shadow-sm">
-            <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-              Anomaly Detector FPR
-            </div>
-            <div className="text-2xl font-black text-emerald-700 mt-1.5">
-              {anomalyDetectors ? `${(anomalyDetectors.overall_fpr * 100).toFixed(1)}%` : '0.0%'}
-            </div>
-            <div className="text-[11px] text-slate-400 mt-0.5">
-              Target: &lt;10.0%
-            </div>
-            <div className="mt-2 text-[10px] font-semibold text-emerald-600 flex items-center gap-1">
-              <ShieldCheck size={12} /> Low false alert rate
-            </div>
-          </div>
-
-          {/* 5. Explainer Grounding */}
-          <div className="bg-white rounded-[12px] p-4 border border-slate-200 shadow-sm">
-            <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-              Explainer Grounding
-            </div>
-            <div className="text-2xl font-black text-[#0B3C9D] mt-1.5">
-              {explainer ? `${explainer.grounding_rate_pct.toFixed(1)}%` : '100%'}
-            </div>
-            <div className="text-[11px] text-slate-400 mt-0.5">
-              {explainer?.statements_grounded || 0} / {explainer?.statements_checked || 0} grounded
-            </div>
-            <div className="mt-2 text-[10px] font-semibold text-slate-500">
-              Zero hallucinated claims
-            </div>
-          </div>
-
-          {/* 6. Human Agreement Rate */}
-          <div className="bg-white rounded-[12px] p-4 border border-slate-200 shadow-sm">
-            <div className="text-[11px] font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1">
-              <ThumbsUp size={11} className="text-[#0B3C9D]" />
-              Human Agreement
-            </div>
-            <div className="text-2xl font-black text-[#0B3C9D] mt-1.5">
-              {feedbackStats && feedbackStats.total_feedback > 0
-                ? `${feedbackStats.agreement_rate_pct.toFixed(1)}%`
-                : '100%'}
-            </div>
-            <div className="text-[11px] text-slate-400 mt-0.5">
-              {feedbackStats?.total_feedback || 0} total reviews logged
-            </div>
-            <div className="mt-2 text-[10px] text-slate-500">
-              Officer review consensus
-            </div>
           </div>
         </div>
       )}
 
-      {/* Main Grid: Per-Field Accuracy & Anomaly Detector Performance */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Per-Field Accuracy Breakdown */}
-        <div className="bg-white rounded-[12px] p-6 shadow-sm border border-slate-200">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h3 className="text-sm font-bold text-[#0F2A5C] uppercase tracking-wider">
-                Per-Field Extraction Accuracy
-              </h3>
-              <p className="text-xs text-slate-500">
-                Normalized match (case/format-insensitive) vs Strict exact match
-              </p>
-            </div>
-          </div>
+      {/* Scenario Dimension Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+        {evalData?.scenarios.map((sc, idx) => {
+          const isPassed = sc.status === 'PASSED';
+          const plainTitle = getPlainDimensionName(sc.dimension);
 
-          <div className="space-y-4">
-            {fieldExtraction?.per_field &&
-              Object.entries(fieldExtraction.per_field).map(([fieldKey, fStats]) => (
-                <div key={fieldKey} className="space-y-1.5">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-semibold text-slate-700 capitalize">
-                      {fieldKey.replace(/_/g, ' ')}
-                    </span>
-                    <span className="font-bold text-slate-800">
-                      {fStats.normalized_match_pct.toFixed(1)}%{' '}
-                      <span className="text-[10px] text-slate-400 font-normal">
-                        (exact: {fStats.exact_match_pct.toFixed(1)}%, n={fStats.total_evaluated})
-                      </span>
-                    </span>
-                  </div>
-                  {/* Dual progress bar */}
-                  <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden flex">
-                    <div
-                      className="bg-[#0B3C9D] h-full rounded-full transition-all duration-500"
-                      style={{ width: `${Math.min(100, fStats.normalized_match_pct)}%` }}
-                    />
-                  </div>
+          // Previous run score comparison
+          const prevScore = evalData.previous_run?.dimension_scores?.[sc.dimension];
+          const hasPrev = prevScore !== undefined && prevScore !== null;
+          const scoreDiff = hasPrev ? sc.score - prevScore : 0;
+
+          return (
+            <div
+              key={idx}
+              className={`bg-white rounded-xl border p-5 shadow-sm flex flex-col justify-between space-y-4 transition-all ${
+                isPassed ? 'border-slate-200 hover:border-[#0B3C9D]' : 'border-red-300 ring-1 ring-red-200 bg-red-50/10'
+              }`}
+            >
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <h3 className="text-sm font-bold text-slate-900 leading-snug">
+                    {plainTitle}
+                  </h3>
+                  <span
+                    className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold border shrink-0 ${
+                      isPassed
+                        ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
+                        : 'bg-red-100 text-red-800 border-red-200 font-bold'
+                    }`}
+                  >
+                    {isPassed ? 'Passed' : 'Failed'}
+                  </span>
                 </div>
-              ))}
-          </div>
-        </div>
 
-        {/* Anomaly Detector Performance Table */}
-        <div className="bg-white rounded-[12px] p-6 shadow-sm border border-slate-200">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h3 className="text-sm font-bold text-[#0F2A5C] uppercase tracking-wider">
-                Anomaly Detector Precision & FPR
-              </h3>
-              <p className="text-xs text-slate-500">
-                Detector benchmark across synthetic tamper, date mismatch, and metadata anomalies
-              </p>
-            </div>
-          </div>
+                <div className="flex items-baseline gap-1.5 flex-wrap">
+                  <span className="text-2xl font-bold text-[#0B3C9D]">{sc.score}</span>
+                  <span className="text-xs font-semibold text-slate-600">{sc.unit}</span>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-xs">
-              <thead>
-                <tr className="border-b border-slate-200 text-slate-500 font-bold uppercase text-[10px] tracking-wider">
-                  <th className="pb-2">Detector</th>
-                  <th className="pb-2 text-center">Precision</th>
-                  <th className="pb-2 text-center">Recall</th>
-                  <th className="pb-2 text-center">FPR</th>
-                  <th className="pb-2 text-center">TP / FP / FN</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 font-medium">
-                {anomalyDetectors?.per_detector &&
-                  Object.entries(anomalyDetectors.per_detector).map(([dName, stats]) => (
-                    <tr key={dName} className="hover:bg-slate-50 transition-colors">
-                      <td className="py-2.5 font-bold text-slate-800 capitalize">
-                        {dName.replace(/_/g, ' ')}
-                      </td>
-                      <td className="py-2.5 text-center text-slate-700">
-                        {(stats.precision * 100).toFixed(1)}%
-                      </td>
-                      <td className="py-2.5 text-center text-slate-700">
-                        {(stats.recall * 100).toFixed(1)}%
-                      </td>
-                      <td className="py-2.5 text-center">
-                        <span
-                          className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                            stats.fpr <= 0.05
-                              ? 'bg-emerald-50 text-emerald-800'
-                              : stats.fpr <= 0.1
-                              ? 'bg-amber-50 text-amber-800'
-                              : 'bg-red-50 text-red-800'
-                          }`}
-                        >
-                          {(stats.fpr * 100).toFixed(1)}%
+                  {/* Previous run marker */}
+                  {hasPrev && (
+                    <span className="ml-auto text-[11px] font-medium flex items-center gap-1 text-slate-500">
+                      <span>Prev: {prevScore}{sc.unit}</span>
+                      {scoreDiff > 0 ? (
+                        <span className="text-emerald-700 flex items-center font-bold" title={`Increased by ${scoreDiff.toFixed(1)}`}>
+                          <TrendingUp size={12} />
+                          <span>+{scoreDiff.toFixed(1)}</span>
                         </span>
-                      </td>
-                      <td className="py-2.5 text-center text-slate-400 font-mono text-[10px]">
-                        {stats.tp} / {stats.fp} / {stats.fn}
-                      </td>
-                    </tr>
-                  ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+                      ) : scoreDiff < 0 ? (
+                        <span className="text-red-700 flex items-center font-bold" title={`Decreased by ${Math.abs(scoreDiff).toFixed(1)}`}>
+                          <TrendingDown size={12} />
+                          <span>{scoreDiff.toFixed(1)}</span>
+                        </span>
+                      ) : (
+                        <span className="text-slate-400 flex items-center" title="Unchanged">
+                          <Minus size={11} />
+                        </span>
+                      )}
+                    </span>
+                  )}
+                </div>
+
+                {/* Failure Reason Callout */}
+                {!isPassed && sc.failure_reason && (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-2.5 text-xs text-red-800 font-medium leading-relaxed">
+                    <span className="font-bold block text-red-900 mb-0.5">Failure reason:</span>
+                    {formatPlainWording(sc.failure_reason)}
+                  </div>
+                )}
+
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  {formatPlainWording(sc.details)}
+                </p>
+              </div>
+
+              {/* Scenario Checks List */}
+              <div className="pt-3 border-t border-slate-100 space-y-1.5">
+                <span className="text-[11px] font-semibold text-slate-700 block">
+                  Scenario checks
+                </span>
+                {sc.test_cases.map((tc, cIdx) => (
+                  <div key={cIdx} className="flex items-start gap-1.5 text-[11px] text-slate-700">
+                    <Check size={12} className="text-emerald-600 shrink-0 mt-0.5" />
+                    <span className="leading-tight">{formatPlainWording(tc)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })}
       </div>
 
-      {/* Confusion Matrix Heatmap */}
-      {classification?.confusion_matrix && (
-        <div className="bg-white rounded-[12px] p-6 shadow-sm border border-slate-200">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h3 className="text-sm font-bold text-[#0F2A5C] uppercase tracking-wider">
-                Classification Confusion Matrix Heatmap
-              </h3>
-              <p className="text-xs text-slate-500">
-                Ground Truth document type (Rows) vs Pipeline Classified type (Columns). Diagonal cells represent correct matches.
-              </p>
-            </div>
+      {/* Recent Evaluation Runs List */}
+      {evalData && evalData.recent_runs && evalData.recent_runs.length > 0 && (
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-3">
+          <div className="flex items-center gap-2">
+            <History size={16} className="text-slate-600" />
+            <h3 className="text-sm font-bold text-slate-900">
+              Recent evaluation runs
+            </h3>
           </div>
-
-          <div className="overflow-x-auto max-h-[460px] overflow-y-auto border border-slate-200 rounded-lg">
-            <table className="w-full border-collapse text-[10px]">
-              <thead className="sticky top-0 bg-slate-100 z-10">
-                <tr>
-                  <th className="p-2 border border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-left min-w-[140px] bg-slate-100">
-                    True \ Pred
-                  </th>
-                  {classification.confusion_matrix.labels.map((lbl) => (
-                    <th
-                      key={lbl}
-                      className="p-1.5 border border-slate-200 text-slate-700 font-semibold text-center min-w-[70px] max-w-[90px] truncate"
-                      title={lbl}
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+            {evalData.recent_runs.map((r, rIdx) => {
+              const isCurrent = r.id === evalData.id;
+              const isComp = r.status === 'COMPLETED';
+              return (
+                <div
+                  key={r.id || rIdx}
+                  className={`p-3 rounded-lg border text-xs space-y-1.5 ${
+                    isCurrent ? 'bg-blue-50/60 border-blue-200 ring-1 ring-blue-100' : 'bg-slate-50 border-slate-200'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono text-[11px] font-bold text-slate-800">
+                      Run #{r.id} {isCurrent && '(Latest)'}
+                    </span>
+                    <span
+                      className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                        isComp ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'
+                      }`}
                     >
-                      {lbl.length > 9 ? lbl.slice(0, 9) + '..' : lbl}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {classification.confusion_matrix.labels.map((rowLbl, rowIdx) => (
-                  <tr key={rowLbl}>
-                    <td className="p-2 border border-slate-200 font-bold text-slate-700 bg-slate-50 truncate max-w-[140px]" title={rowLbl}>
-                      {rowLbl}
-                    </td>
-                    {classification.confusion_matrix.labels.map((colLbl, colIdx) => {
-                      const count = classification.confusion_matrix.matrix[rowIdx]?.[colIdx] || 0;
-                      const isDiagonal = rowIdx === colIdx;
-                      let bgClass = 'bg-white text-slate-300';
-                      if (count > 0 && isDiagonal) {
-                        bgClass = 'bg-emerald-100 font-bold text-emerald-900';
-                      } else if (count > 0 && !isDiagonal) {
-                        bgClass = 'bg-red-100 font-bold text-red-900';
-                      }
-                      return (
-                        <td
-                          key={colLbl}
-                          className={`p-1.5 border border-slate-200 text-center ${bgClass}`}
-                        >
-                          {count}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                      {isComp ? 'Completed' : 'Failed'}
+                    </span>
+                  </div>
+                  <div className="flex items-baseline justify-between pt-1">
+                    <span className="font-bold text-slate-900 text-sm">{r.overall_result}%</span>
+                    <span className="text-[11px] text-slate-500 font-mono">{r.duration_seconds}s</span>
+                  </div>
+                  <span className="text-[10px] text-slate-500 block truncate" title={formatDateTime(r.evaluated_at)}>
+                    {formatDateTime(r.evaluated_at)}
+                  </span>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
 
-      {/* Failed Cases Log */}
-      <div className="bg-white rounded-[12px] p-6 shadow-sm border border-slate-200 space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div>
-            <h3 className="text-sm font-bold text-[#0F2A5C] uppercase tracking-wider">
-              Benchmark Inspection Log ({failedCases.length} records)
-            </h3>
-            <p className="text-xs text-slate-500">
-              Test documents with classification mismatches, missing fields, or detector errors
-            </p>
+      {/* Detailed Evaluation Verification Table */}
+      {evalData && (
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-semibold text-slate-900">
+                Evaluation verification details
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Synthetic scenarios, verification matrices, and automated benchmark validations.
+              </p>
+            </div>
           </div>
 
-          <div className="relative w-full sm:w-64">
-            <Search size={14} className="absolute left-3 top-3 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Search file or doc type..."
-              value={failedCasesSearch}
-              onChange={(e) => setFailedCasesSearch(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-[#0B3C9D]"
-            />
+          <div>
+            {(() => {
+              const columns: ColumnDef<ScenarioItem>[] = [
+                {
+                  key: 'dimension',
+                  header: 'Dimension',
+                  width: '24%',
+                  align: 'left',
+                  sticky: true,
+                  render: (sc) => (
+                    <div>
+                      <span className="font-semibold text-slate-900 text-xs block">
+                        {getPlainDimensionName(sc.dimension)}
+                      </span>
+                      <span className="text-[11px] text-slate-500 block mt-0.5">
+                        {sc.dimension}
+                      </span>
+                    </div>
+                  ),
+                },
+                {
+                  key: 'score',
+                  header: 'Metric score',
+                  width: '18%',
+                  align: 'left',
+                  render: (sc) => {
+                    const prevScore = evalData.previous_run?.dimension_scores?.[sc.dimension];
+                    const hasPrev = prevScore !== undefined && prevScore !== null;
+                    const diff = hasPrev ? sc.score - prevScore : 0;
+                    return (
+                      <div>
+                        <div className="flex items-baseline gap-1">
+                          <span className="font-bold text-[#0B3C9D] text-sm">{sc.score}</span>
+                          <span className="text-xs text-slate-600">{sc.unit}</span>
+                        </div>
+                        {hasPrev && (
+                          <span className="text-[10px] text-slate-500 block mt-0.5">
+                            Prev: {prevScore}{sc.unit} ({diff > 0 ? `+${diff.toFixed(1)}` : diff < 0 ? diff.toFixed(1) : '—'})
+                          </span>
+                        )}
+                      </div>
+                    );
+                  },
+                },
+                {
+                  key: 'details',
+                  header: 'Evaluation details',
+                  width: '32%',
+                  align: 'left',
+                  render: (sc) => (
+                    <div>
+                      <span className="text-xs text-slate-700 leading-relaxed block line-clamp-2" title={formatPlainWording(sc.details)}>
+                        {formatPlainWording(sc.details)}
+                      </span>
+                      {sc.status === 'FAILED' && sc.failure_reason && (
+                        <span className="text-[11px] text-red-700 font-semibold block mt-1">
+                          ⚠️ {formatPlainWording(sc.failure_reason)}
+                        </span>
+                      )}
+                    </div>
+                  ),
+                },
+                {
+                  key: 'checks',
+                  header: 'Validation checks',
+                  width: '16%',
+                  align: 'left',
+                  render: (sc) => (
+                    <div className="text-[11px] text-slate-600 space-y-1">
+                      <span className="font-medium text-emerald-700 block">
+                        {sc.test_cases.length} check(s) passed
+                      </span>
+                    </div>
+                  ),
+                },
+                {
+                  key: 'status',
+                  header: 'Status',
+                  width: '10%',
+                  align: 'left',
+                  render: (sc) => (
+                    <span
+                      className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold border ${
+                        sc.status === 'PASSED'
+                          ? 'bg-emerald-100 text-emerald-800 border-emerald-200'
+                          : 'bg-red-100 text-red-800 border-red-200 font-bold'
+                      }`}
+                    >
+                      {sc.status === 'PASSED' ? 'Passed' : 'Failed'}
+                    </span>
+                  ),
+                },
+              ];
+
+              return (
+                <DataTable
+                  columns={columns}
+                  data={evalData.scenarios}
+                  keyExtractor={(sc, i) => sc.dimension || i}
+                  isLoading={isLoading}
+                  emptyMessage="No evaluation data found."
+                  isWide={true}
+                />
+              );
+            })()}
           </div>
         </div>
-
-        {failedCases.length === 0 ? (
-          <div className="text-center py-8 bg-slate-50 rounded-lg border border-dashed border-slate-200">
-            <CheckCircle2 size={28} className="mx-auto text-emerald-600 mb-2" />
-            <p className="text-xs font-bold text-slate-700">All evaluated benchmark cases passed requirements!</p>
-            <p className="text-[11px] text-slate-400 mt-0.5">No anomalies or extraction discrepancies detected.</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto border border-slate-200 rounded-lg">
-            <table className="w-full text-left border-collapse text-xs">
-              <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 uppercase font-bold text-[10px] tracking-wider">
-                <tr>
-                  <th className="py-2.5 px-3">File Name</th>
-                  <th className="py-2.5 px-3">Document Type</th>
-                  <th className="py-2.5 px-3">Failure Diagnostic</th>
-                  <th className="py-2.5 px-3 text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {failedCases.map((fc, i) => (
-                  <tr key={i} className="hover:bg-slate-50 transition-colors">
-                    <td className="py-2.5 px-3 font-mono text-[11px] text-slate-700 max-w-[220px] truncate" title={fc.filename}>
-                      {fc.filename}
-                    </td>
-                    <td className="py-2.5 px-3 font-semibold text-slate-800">
-                      {fc.doc_type}
-                    </td>
-                    <td className="py-2.5 px-3">
-                      <div className="flex flex-wrap gap-1">
-                        {fc.failures.map((f, fi) => (
-                          <span
-                            key={fi}
-                            className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-900 border border-amber-200"
-                          >
-                            {f}
-                          </span>
-                        ))}
-                      </div>
-                    </td>
-                    <td className="py-2.5 px-3 text-right">
-                      <button
-                        onClick={() => setPreviewCase(fc)}
-                        className="px-2.5 py-1 text-[11px] font-semibold text-[#0B3C9D] hover:bg-blue-50 rounded inline-flex items-center gap-1 transition-colors"
-                      >
-                        <Eye size={12} />
-                        <span>Inspect</span>
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-
-      {/* Case Preview Modal */}
-      {previewCase && (
-        <Modal
-          isOpen={!!previewCase}
-          onClose={() => setPreviewCase(null)}
-          title={`Diagnostic Inspection: ${previewCase.filename}`}
-          subtitle={`Expected Document Type: ${previewCase.doc_type}`}
-          maxWidth="max-w-[700px]"
-          footer={
-            <button
-              onClick={() => setPreviewCase(null)}
-              className="h-10 px-5 bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-bold rounded-lg transition-colors"
-            >
-              Close
-            </button>
-          }
-        >
-          <div className="space-y-4 text-xs">
-            <div>
-              <span className="font-bold text-slate-700 uppercase block mb-1">Failure Diagnostics:</span>
-              <ul className="list-disc pl-4 space-y-1 text-red-600 font-semibold">
-                {previewCase.failures.map((f, idx) => (
-                  <li key={idx}>{f}</li>
-                ))}
-              </ul>
-            </div>
-
-            <div>
-              <span className="font-bold text-slate-700 uppercase block mb-1">Benchmark Run Details:</span>
-              <pre className="bg-slate-900 text-slate-100 p-3 rounded-lg overflow-x-auto text-[11px] font-mono leading-relaxed max-h-60">
-                {JSON.stringify(previewCase.details, null, 2)}
-              </pre>
-            </div>
-          </div>
-        </Modal>
       )}
     </div>
   );
 };
-export default AdminEvaluationPage;

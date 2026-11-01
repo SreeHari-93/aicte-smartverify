@@ -1,4 +1,10 @@
-export type UserRole = 'INSTITUTE' | 'ADMIN' | 'REVIEWER';
+export type UserRole =
+  | 'INSTITUTE'
+  | 'ADMIN'
+  | 'REVIEWER'
+  | 'REGIONAL_OFFICER'
+  | 'BUREAU_OFFICER'
+  | 'COMMITTEE_MEMBER';
 
 export interface InstituteInfo {
   id: number;
@@ -12,6 +18,7 @@ export interface User {
   id: number;
   email: string;
   role: UserRole;
+  region?: string | null;
   is_active: boolean;
   institute?: InstituteInfo | null;
 }

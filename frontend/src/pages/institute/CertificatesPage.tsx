@@ -130,7 +130,17 @@ export const CertificatesPage: React.FC = () => {
 
   return (
     <div className="space-y-6 animate-fade-in pb-12">
-      {/* 1. Top of Main Area shows the background image with NO title (as instructed) */}
+      {/* Page Title Card */}
+      <div className="bg-white rounded-xl p-6 border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-bold text-slate-900 tracking-tight">
+            Certificates
+          </h1>
+          <p className="text-sm text-slate-600 mt-1">
+            Track accreditation certificates, expirations, and renewals.
+          </p>
+        </div>
+      </div>
 
       {/* 2. Row of 4 Stat Cards: Total, Expiring Soon, Expired, Renewed */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
@@ -220,27 +230,27 @@ export const CertificatesPage: React.FC = () => {
                 <col style={{ width: '12%' }} />
               </colgroup>
               <thead>
-                <tr className="bg-[#E3F0FF] text-[#0B3C9D] uppercase text-[10.5px] xl:text-[11.5px] font-bold tracking-[0.04em]">
-                  <th className="py-2.5 px-1.5 xl:px-2.5 rounded-l-md">App ID</th>
-                  <th className="py-2.5 px-1.5 xl:px-2.5">Certificate</th>
-                  <th className="py-2.5 px-1.5 xl:px-2.5">Cert ID</th>
-                  <th className="py-2.5 px-1.5 xl:px-2.5">Issued</th>
-                  <th className="py-2.5 px-1.5 xl:px-2.5">Expires</th>
-                  <th className="py-2.5 px-1.5 xl:px-2.5">Status</th>
-                  <th className="py-2.5 px-1.5 xl:px-2.5 text-center rounded-r-md">Action</th>
+                <tr className="bg-slate-50 text-slate-600 font-semibold border-b border-slate-200 text-xs">
+                  <th className="py-2.5 px-3">App ID</th>
+                  <th className="py-2.5 px-3">Certificate</th>
+                  <th className="py-2.5 px-3">Cert ID</th>
+                  <th className="py-2.5 px-3">Issued</th>
+                  <th className="py-2.5 px-3">Expires</th>
+                  <th className="py-2.5 px-3">Status</th>
+                  <th className="py-2.5 px-3 text-center">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-[11.5px] xl:text-[13px] text-slate-700">
                 {isLoading ? (
                   <tr>
-                    <td colSpan={7} className="py-12 text-center text-slate-400">
+                    <td colSpan={7} className="py-12 text-center text-slate-600">
                       <Loader2 size={24} className="animate-spin mx-auto mb-2 text-[#F58220]" />
                       Loading certificates...
                     </td>
                   </tr>
                 ) : !data?.items || data.items.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="py-8 text-center text-slate-400">
+                    <td colSpan={7} className="py-8 text-center text-slate-600">
                       No matching certificates found.
                     </td>
                   </tr>
@@ -260,7 +270,7 @@ export const CertificatesPage: React.FC = () => {
                         {cert.name}
                       </td>
                       <td
-                        className="py-2.5 px-1.5 xl:px-2.5 font-mono text-[11px] xl:text-[12px] text-slate-500 whitespace-nowrap overflow-hidden text-ellipsis"
+                        className="py-2.5 px-1.5 xl:px-2.5 font-mono text-[11px] xl:text-[12px] text-slate-600 whitespace-nowrap overflow-hidden text-ellipsis"
                         title={cert.certificate_id}
                       >
                         {cert.certificate_id}
@@ -311,12 +321,12 @@ export const CertificatesPage: React.FC = () => {
           {/* Mobile & Tablet Stacked Cards (< 1024px) - No Horizontal Scroll */}
           <div className="block lg:hidden mt-3.5 space-y-3">
             {isLoading ? (
-              <div className="py-12 text-center text-slate-400">
+              <div className="py-12 text-center text-slate-600">
                 <Loader2 size={24} className="animate-spin mx-auto mb-2 text-[#F58220]" />
                 Loading certificates...
               </div>
             ) : !data?.items || data.items.length === 0 ? (
-              <div className="py-8 text-center text-slate-400">
+              <div className="py-8 text-center text-slate-600">
                 No matching certificates found.
               </div>
             ) : (
@@ -342,16 +352,16 @@ export const CertificatesPage: React.FC = () => {
 
                   <div className="grid grid-cols-2 gap-2 text-[12px] pt-2 border-t border-slate-200/70">
                     <div>
-                      <span className="text-slate-400 block text-[10px] uppercase font-semibold">App ID</span>
+                      <span className="text-slate-600 block text-[10px] uppercase font-semibold">App ID</span>
                       <span className="font-mono text-[#0F2A5C]">{cert.application_id || 'N/A'}</span>
                     </div>
                     <div>
-                      <span className="text-slate-400 block text-[10px] uppercase font-semibold">Issued</span>
+                      <span className="text-slate-600 block text-[10px] uppercase font-semibold">Issued</span>
                       <span className="text-slate-700">{formatDate(cert.issue_date)}</span>
                     </div>
                     <div className="col-span-2 flex items-center justify-between pt-1">
                       <div>
-                        <span className="text-slate-400 block text-[10px] uppercase font-semibold">Expires</span>
+                        <span className="text-slate-600 block text-[10px] uppercase font-semibold">Expires</span>
                         <span className="font-semibold text-[#0F2A5C]">{formatDate(cert.expiry_date)}</span>
                       </div>
                       <div className="flex items-center gap-1.5">
@@ -424,7 +434,7 @@ export const CertificatesPage: React.FC = () => {
           {/* List sorted soonest first */}
           <div className="divide-y divide-slate-100 mt-2 flex-1">
             {upcoming.length === 0 ? (
-              <p className="text-xs text-slate-400 py-8 text-center">No upcoming expiries.</p>
+              <p className="text-xs text-slate-600 py-8 text-center">No upcoming expiries.</p>
             ) : (
               upcoming.map((item) => (
                 <div key={item.id} className="py-3.5 flex items-center gap-3.5 hover:bg-slate-50/70 rounded-md px-1 transition-colors">
@@ -570,7 +580,7 @@ export const CertificatesPage: React.FC = () => {
               accept=".pdf,.jpg,.jpeg,.png"
               className="w-full py-2 text-xs text-slate-500 file:mr-3 file:py-2 file:px-3 file:rounded-md file:border-0 file:bg-[#E3F0FF] file:text-[#0B3C9D] file:font-semibold hover:file:bg-blue-100 cursor-pointer"
             />
-            <p className="text-[10px] text-slate-400 mt-1">Accepts authentic certificates up to 10 MB.</p>
+            <p className="text-[10px] text-slate-600 mt-1">Accepts authentic certificates up to 10 MB.</p>
           </div>
 
           <div className="pt-4 flex justify-end gap-2.5">
@@ -584,7 +594,7 @@ export const CertificatesPage: React.FC = () => {
             <button
               type="submit"
               disabled={isSubmittingRenewal}
-              className="px-5 py-2 bg-[#F58220] hover:bg-[#E06F0F] text-white font-semibold rounded-[6px] transition-colors disabled:opacity-50 flex items-center gap-1.5"
+              className="px-5 py-2 bg-[#F58220] hover:bg-[#E06F0F] text-white font-semibold rounded-[6px] transition-colors disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-1.5"
             >
               {isSubmittingRenewal && <Loader2 size={14} className="animate-spin" />}
               <span>Submit Renewal</span>

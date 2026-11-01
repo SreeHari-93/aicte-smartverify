@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Bot,
   Play,
   Sparkles,
   HelpCircle,
@@ -248,37 +247,26 @@ export const ValidationPage: React.FC = () => {
 
   return (
     <div className="space-y-6 animate-fade-in pb-12">
-      {/* 1. Controller Card with Robot Icon, App Selector, and Active "Run Validation" Button */}
-      <div className="bg-white rounded-[12px] p-6 shadow-[0_6px_18px_rgba(0,0,0,0.18)] border border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-xl bg-[#E3F0FF] text-[#0B3C9D] flex items-center justify-center shrink-0">
-            <Bot size={26} />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-xl font-bold text-[#0B3C9D] tracking-tight">
-                AI Validation & Scrutiny Engine
-              </h2>
-              <span className="text-[10px] font-bold uppercase tracking-wider text-purple-700 bg-purple-100 px-2.5 py-0.5 rounded-full flex items-center gap-1">
-                <Sparkles size={11} />
-                <span>SmartVerify AI Core</span>
-              </span>
-            </div>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Automated multi-point regulatory compliance verification, cross-document OCR reconciliation & deficiency detection.
-            </p>
-          </div>
+      {/* 1. Controller Card */}
+      <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-bold text-slate-900 tracking-tight">
+            Validation
+          </h1>
+          <p className="text-sm text-slate-600 mt-1">
+            Regulatory compliance verification, cross-document OCR reconciliation and deficiency detection.
+          </p>
         </div>
 
         <div className="flex items-center gap-3 flex-wrap">
           <div className="flex flex-col">
-            <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+            <label className="text-[10px] font-bold uppercase tracking-wider text-slate-600 mb-1">
               Select Application
             </label>
             <select
               value={selectedAppId}
               onChange={(e) => handleAppChange(e.target.value)}
-              className="h-10 px-3 text-xs rounded-lg border border-[#D5DBE5] text-[#0F2A5C] bg-white focus:border-[#F58220] outline-none font-mono"
+              className="h-10 px-3 text-xs rounded-lg border border-slate-300 text-slate-800 bg-white focus:border-[#0B3C9D] outline-none font-mono"
             >
               {applications.length > 0 ? (
                 applications.slice(0, 10).map((a) => (
@@ -297,11 +285,11 @@ export const ValidationPage: React.FC = () => {
             <button
               onClick={handleRunValidation}
               disabled={isValidating}
-              className="h-10 px-4 bg-[#0B3C9D] hover:bg-[#093280] active:scale-[0.98] text-white text-xs font-semibold rounded-[6px] transition-all flex items-center gap-2 shadow-xs cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed select-none"
+              className="h-10 px-4 bg-[#0B3C9D] hover:bg-[#093280] active:scale-[0.98] text-white text-xs font-semibold rounded-[6px] transition-all flex items-center gap-2 shadow-xs cursor-pointer disabled:bg-slate-300 disabled:text-slate-600 disabled:cursor-not-allowed select-none"
               title="Run statutory validation engine"
             >
               <Play size={14} className={isValidating ? 'animate-spin' : ''} />
-              <span>{isValidating ? 'Validating...' : 'Run Validation'}</span>
+              <span>{isValidating ? 'Running check...' : 'Run check now'}</span>
             </button>
 
             {/* "Download PDF report" button with English / Hindi choice */}
@@ -597,11 +585,11 @@ export const ValidationPage: React.FC = () => {
 
         {/* SVG Diagram Canvas */}
         {isLoadingGraph ? (
-          <div className="py-20 text-center text-slate-400 text-xs">
+          <div className="py-20 text-center text-slate-600 text-xs">
             Loading application evidence network...
           </div>
         ) : !evidenceGraph || evidenceGraph.nodes.length === 0 ? (
-          <div className="py-16 text-center text-slate-400 text-xs border border-dashed rounded-xl">
+          <div className="py-16 text-center text-slate-600 text-xs border border-dashed rounded-xl">
             No evidence graph data available for this application.
           </div>
         ) : (
@@ -802,30 +790,30 @@ export const ValidationPage: React.FC = () => {
         </div>
 
         {/* Validation Table: Check, Result, Evidence, Suggested Action */}
-        <div className="overflow-x-auto mt-4">
-          <table className="w-full text-left border-collapse text-xs">
+        <div className="table-container mt-4">
+          <table className="aicte-table">
             <thead>
-              <tr className="bg-[#E3F0FF] text-[#0B3C9D] uppercase text-[11px] font-bold tracking-wider">
-                <th className="py-3 px-4 rounded-l-md w-1/4">Statutory Check</th>
-                <th className="py-3 px-4 w-28">Result</th>
-                <th className="py-3 px-4 w-5/12">Evidence & Verification Detail</th>
-                <th className="py-3 px-4 rounded-r-md">Suggested Action</th>
+              <tr className="bg-slate-50 text-slate-600 font-semibold border-b border-slate-200 text-xs">
+                <th className="py-2.5 px-3 w-1/4">Rule check</th>
+                <th className="py-2.5 px-3 w-28">Result</th>
+                <th className="py-2.5 px-3 w-5/12">Evidence & verification detail</th>
+                <th className="py-2.5 px-3">Suggested action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
               {checks.length > 0 ? (
                 checks.map((item, idx) => (
                   <tr key={idx} className="hover:bg-slate-50/80 transition-colors">
-                    <td className="py-4 px-4 font-bold text-[#0F2A5C] align-top">
+                    <td className="py-2.5 px-3 font-semibold text-[#0F2A5C] align-top text-xs">
                       {item.check}
                     </td>
-                    <td className="py-4 px-4 align-top">
+                    <td className="py-2.5 px-3 align-top">
                       <StatusPill status={item.result} />
                     </td>
-                    <td className="py-4 px-4 text-slate-600 leading-relaxed align-top">
+                    <td className="py-2.5 px-3 text-slate-600 leading-relaxed align-top text-xs">
                       <div>{item.evidence}</div>
                       {(item.verification_status || item.source_name) && (
-                        <div className="mt-2 flex items-center gap-2 flex-wrap">
+                        <div className="mt-1.5 flex items-center gap-2 flex-wrap">
                           {item.verification_status && (
                             <StatusPill
                               status={formatVerificationStatus(item.verification_status)}
@@ -833,14 +821,14 @@ export const ValidationPage: React.FC = () => {
                             />
                           )}
                           {item.source_name && (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.2 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">
                               Source: <strong className="text-[#0B3C9D]">{item.source_name}</strong>
                             </span>
                           )}
                         </div>
                       )}
                     </td>
-                    <td className="py-4 px-4 text-slate-800 font-medium align-top">
+                    <td className="py-2.5 px-3 text-slate-800 font-medium align-top text-xs">
                       {item.suggested_action}
                     </td>
                   </tr>
@@ -886,7 +874,7 @@ export const ValidationPage: React.FC = () => {
           {selectedGraphNode && (
             <div className="space-y-4">
               <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-1">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-600 block">
                   Label / Entity Identifier
                 </span>
                 <h4 className="text-sm font-bold text-[#0F2A5C]">{selectedGraphNode.label}</h4>
@@ -959,7 +947,7 @@ export const ValidationPage: React.FC = () => {
           {selectedGraphEdge && (
             <div className="space-y-4">
               <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-1">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-600 block">
                   Relationship Link
                 </span>
                 <h4 className="text-sm font-bold text-[#0F2A5C]">{selectedGraphEdge.label}</h4>

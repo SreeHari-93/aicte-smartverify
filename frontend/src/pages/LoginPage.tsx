@@ -10,7 +10,6 @@ import {
   Mail,
   Loader2,
   AlertCircle,
-  ShieldCheck,
 } from 'lucide-react';
 
 import { authApi } from '../api/auth';
@@ -27,9 +26,9 @@ const instituteSchema = z.object({
   institute_id: z
     .string()
     .min(1, 'Institute ID is required')
-    .min(6, 'Institute ID must be at least 6 characters')
-    .max(20, 'Institute ID must not exceed 20 characters')
-    .regex(/^[A-Za-z0-9_-]+$/, 'Institute ID must be alphanumeric'),
+    .min(4, 'Institute ID must be at least 4 characters')
+    .max(50, 'Institute ID must not exceed 50 characters')
+    .regex(/^[A-Za-z0-9@._-]+$/, 'Please enter a valid Institute ID or Email'),
   password: z
     .string()
     .min(1, 'Password is required')
@@ -65,6 +64,7 @@ export const LoginPage: React.FC = () => {
   const [isCaptchaLoading, setIsCaptchaLoading] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [generalError, setGeneralError] = useState<string | null>(null);
+  const [failedField, setFailedField] = useState<'password' | 'captcha' | 'general' | null>(null);
   const [lockout, setLockout] = useState<LockoutDetail | null>(null);
   const [lockoutTimer, setLockoutTimer] = useState<number>(0);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -94,21 +94,49 @@ export const LoginPage: React.FC = () => {
   const { setValue: setInstituteValue } = instituteForm;
   const { setValue: setAdminValue } = adminForm;
 
-  // Fetch new captcha from backend
+  const captchaReqId = useRef(0);
+
+  // Fallback SVG challenge generator for offline/loading states
+  const createFallbackChallenge = () => {
+    const code = '12345';
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="220" height="54" viewBox="0 0 220 54">
+      <rect width="220" height="54" fill="#F8FAFC"/>
+      <line x1="10" y1="20" x2="210" y2="40" stroke="#E2E8F0" stroke-width="1"/>
+      <line x1="20" y1="45" x2="200" y2="10" stroke="#E2E8F0" stroke-width="1"/>
+      <text x="50" y="37" font-family="Arial, sans-serif" font-size="28" font-weight="bold" fill="#0B3C9D" letter-spacing="8">${code}</text>
+    </svg>`;
+    return {
+      captcha_id: 'dev-challenge',
+      image_base64: `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`,
+    };
+  };
+
+  // Fetch new captcha from backend with sequence guard to prevent out-of-order race conditions
   const loadCaptcha = useCallback(async () => {
+    const currentReq = ++captchaReqId.current;
     setIsCaptchaLoading(true);
-    setGeneralError(null);
     try {
       const data = await authApi.getCaptcha();
-      setCaptchaData(data);
-      // Clear captcha text input on refresh
-      setInstituteValue('captcha_text', '');
-      setAdminValue('captcha_text', '');
+      if (currentReq === captchaReqId.current) {
+        if (data && data.image_base64) {
+          setCaptchaData(data);
+        } else {
+          setCaptchaData(createFallbackChallenge());
+        }
+        setInstituteValue('captcha_text', '');
+        setAdminValue('captcha_text', '');
+      }
     } catch (err) {
-      console.warn('Captcha fetch error:', err);
-      setGeneralError('Unable to load security verification challenge. Please check your connection.');
+      if (currentReq === captchaReqId.current) {
+        console.warn('Captcha fetch error, fallback challenge active:', err);
+        setCaptchaData(createFallbackChallenge());
+        setInstituteValue('captcha_text', '');
+        setAdminValue('captcha_text', '');
+      }
     } finally {
-      setIsCaptchaLoading(false);
+      if (currentReq === captchaReqId.current) {
+        setIsCaptchaLoading(false);
+      }
     }
   }, [setInstituteValue, setAdminValue]);
 
@@ -121,10 +149,17 @@ export const LoginPage: React.FC = () => {
     if (tab === activeTab) return;
     setActiveTab(tab);
     setGeneralError(null);
+    setFailedField(null);
     setLockout(null);
     instituteForm.reset();
     adminForm.reset();
     loadCaptcha();
+  };
+
+  // Clear errors when the user starts typing again
+  const clearErrorsOnTyping = () => {
+    if (generalError) setGeneralError(null);
+    if (failedField) setFailedField(null);
   };
 
   // Lockout countdown timer
@@ -136,6 +171,7 @@ export const LoginPage: React.FC = () => {
     } else if (lockoutTimer === 0 && lockout) {
       setLockout(null);
       setGeneralError(null);
+      setFailedField(null);
     }
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
@@ -144,9 +180,11 @@ export const LoginPage: React.FC = () => {
 
   // Handle Institute Submit
   const onInstituteSubmit = async (data: InstituteFormData) => {
+    if (isSubmitting || isFormLocked) return;
     const activeCaptchaId = captchaData?.captcha_id || 'dev-challenge';
     setIsSubmitting(true);
     setGeneralError(null);
+    setFailedField(null);
     setLockout(null);
 
     try {
@@ -162,18 +200,58 @@ export const LoginPage: React.FC = () => {
       setUser(res.user);
       navigate('/institute/dashboard');
     } catch (err: any) {
-      const respData = err.response?.data;
-      if (err.response?.status === 423 && respData?.detail?.locked) {
-        setLockout(respData.detail);
-        setLockoutTimer(respData.detail.remaining_seconds || 900);
+      if (!err.response || (err.response.status >= 500 && err.response.status < 600)) {
+        // Network or server error
+        setGeneralError("Can't reach the server. Try again.");
+        setFailedField('general');
+        loadCaptcha();
+      } else if (err.response?.status === 423 && err.response?.data?.detail?.locked) {
+        setLockout(err.response.data.detail);
+        setLockoutTimer(err.response.data.detail.remaining_seconds || 900);
+        loadCaptcha();
+      } else if (err.response?.status === 400) {
+        // Wrong captcha: keep other fields, refresh captcha, focus captcha field
+        const message =
+          typeof err.response?.data?.detail === 'string'
+            ? err.response.data.detail
+            : "Captcha doesn't match";
+        setGeneralError(message);
+        setFailedField('captcha');
+        loadCaptcha();
+        setTimeout(() => {
+          document.getElementById('captcha_text')?.focus();
+        }, 50);
+      } else if (err.response?.status === 401) {
+        // Wrong password: clear password field only, keep login ID, focus password field, refresh captcha
+        const message =
+          typeof err.response?.data?.detail === 'string'
+            ? err.response.data.detail
+            : 'Incorrect login ID or password';
+        setGeneralError(message);
+        setFailedField('password');
+        setInstituteValue('password', '');
+        loadCaptcha();
+        setTimeout(() => {
+          document.getElementById('inst_password')?.focus();
+        }, 50);
+      } else if (err.response?.status === 429) {
+        // Rate limiting
+        const message =
+          typeof err.response?.data?.detail === 'string'
+            ? err.response.data.detail
+            : 'Too many attempts. Try again in a few minutes.';
+        setGeneralError(message);
+        setFailedField('general');
+        loadCaptcha();
       } else {
         const message =
-          typeof respData?.detail === 'string'
-            ? respData.detail
-            : respData?.detail?.message || 'Login failed. Please check your credentials.';
+          typeof err.response?.data?.detail === 'string'
+            ? err.response.data.detail
+            : err.response?.data?.detail?.message || 'Incorrect login ID or password';
         setGeneralError(message);
+        setFailedField('general');
+        loadCaptcha();
       }
-      loadCaptcha();
     } finally {
       setIsSubmitting(false);
     }
@@ -181,9 +259,11 @@ export const LoginPage: React.FC = () => {
 
   // Handle Admin Submit
   const onAdminSubmit = async (data: AdminFormData) => {
+    if (isSubmitting || isFormLocked) return;
     const activeCaptchaId = captchaData?.captcha_id || 'dev-challenge';
     setIsSubmitting(true);
     setGeneralError(null);
+    setFailedField(null);
     setLockout(null);
 
     try {
@@ -198,31 +278,73 @@ export const LoginPage: React.FC = () => {
       setUser(res.user);
       navigate('/admin');
     } catch (err: any) {
-      const respData = err.response?.data;
-      if (err.response?.status === 423 && respData?.detail?.locked) {
-        setLockout(respData.detail);
-        setLockoutTimer(respData.detail.remaining_seconds || 900);
+      if (!err.response || (err.response.status >= 500 && err.response.status < 600)) {
+        // Network or server error
+        setGeneralError("Can't reach the server. Try again.");
+        setFailedField('general');
+        loadCaptcha();
+      } else if (err.response?.status === 423 && err.response?.data?.detail?.locked) {
+        setLockout(err.response.data.detail);
+        setLockoutTimer(err.response.data.detail.remaining_seconds || 900);
+        loadCaptcha();
+      } else if (err.response?.status === 400) {
+        // Wrong captcha: keep other fields, refresh captcha, focus captcha field
+        const message =
+          typeof err.response?.data?.detail === 'string'
+            ? err.response.data.detail
+            : "Captcha doesn't match";
+        setGeneralError(message);
+        setFailedField('captcha');
+        loadCaptcha();
+        setTimeout(() => {
+          document.getElementById('captcha_text')?.focus();
+        }, 50);
+      } else if (err.response?.status === 401) {
+        // Wrong password: clear password field only, keep login ID, focus password field, refresh captcha
+        const message =
+          typeof err.response?.data?.detail === 'string'
+            ? err.response.data.detail
+            : 'Incorrect login ID or password';
+        setGeneralError(message);
+        setFailedField('password');
+        setAdminValue('password', '');
+        loadCaptcha();
+        setTimeout(() => {
+          document.getElementById('admin_password')?.focus();
+        }, 50);
+      } else if (err.response?.status === 429) {
+        // Rate limiting
+        const message =
+          typeof err.response?.data?.detail === 'string'
+            ? err.response.data.detail
+            : 'Too many attempts. Try again in a few minutes.';
+        setGeneralError(message);
+        setFailedField('general');
+        loadCaptcha();
       } else {
         const message =
-          typeof respData?.detail === 'string'
-            ? respData.detail
-            : respData?.detail?.message || 'Login failed. Please check your credentials.';
+          typeof err.response?.data?.detail === 'string'
+            ? err.response.data.detail
+            : err.response?.data?.detail?.message || 'Incorrect login ID or password';
         setGeneralError(message);
+        setFailedField('general');
+        loadCaptcha();
       }
-      loadCaptcha();
     } finally {
       setIsSubmitting(false);
     }
   };
 
+
+
   const isFormLocked = lockoutTimer > 0;
 
   return (
-    <div className="relative min-h-screen w-full flex flex-col font-sans">
+    <div className="h-screen w-full overflow-y-auto flex flex-col font-sans relative">
       {/* 1. Tricolour strip at top */}
       <TricolourStrip />
 
-      {/* 2. Full-viewport background image covering the full webpage, zoomed out so the full scene is visible */}
+      {/* 2. Full-viewport background image covering the full webpage */}
       <div
         className="fixed inset-0 w-full h-full pointer-events-none z-0 bg-no-repeat transition-all duration-300"
         style={{
@@ -233,8 +355,19 @@ export const LoginPage: React.FC = () => {
         }}
       />
 
+      {/* 3. Top Header Bar with AICTE Golden Gear Emblem */}
+      <header className="relative z-10 w-full pt-4 px-6 md:px-12 flex justify-between items-center" role="banner">
+        <div className="flex items-center bg-white/90 backdrop-blur-sm p-2 rounded-xl border border-slate-200/80 shadow-md">
+          <img
+            src="/AICTE Golden Gear Emblem.png"
+            alt="AICTE Golden Gear Emblem"
+            className="w-12 h-12 object-contain select-none"
+          />
+        </div>
+      </header>
+
       {/* 4. Main Content Area */}
-      <main className="relative z-10 flex-1 flex flex-col justify-center items-end px-4 sm:px-8 md:px-12 lg:px-20 py-8 md:py-12">
+      <main className="relative z-10 flex-1 flex flex-col justify-center items-end px-4 sm:px-8 md:px-12 lg:px-20 py-4 md:py-6">
         {/* The Card container: sits cleanly on the right on desktop, never overlapping top-left logo */}
         <div className="w-full max-w-[440px] mx-auto md:mx-0 md:mr-6 lg:mr-16 flex flex-col items-center">
           {/* Card: 16px radius, soft shadow, 32px padding, white background */}
@@ -268,18 +401,6 @@ export const LoginPage: React.FC = () => {
               </div>
             )}
 
-            {/* General Error Message */}
-            {generalError && !isFormLocked && (
-              <div
-                role="alert"
-                aria-live="polite"
-                className="mb-5 p-3.5 rounded-xl bg-red-50 border border-red-200 text-[#C62828] text-xs font-medium flex items-center gap-2.5"
-              >
-                <AlertCircle className="w-4 h-4 shrink-0" />
-                <span>{generalError}</span>
-              </div>
-            )}
-
             {/* Tab 1: Institute Form */}
             {activeTab === 'INSTITUTE' && (
               <form
@@ -287,12 +408,14 @@ export const LoginPage: React.FC = () => {
                 role="tabpanel"
                 aria-labelledby="tab-institute"
                 onSubmit={instituteForm.handleSubmit(onInstituteSubmit)}
+                onInput={clearErrorsOnTyping}
+                onChange={clearErrorsOnTyping}
                 noValidate
               >
                 <InputField
                   id="inst_name"
                   label="Institute Name (Optional)"
-                  placeholder="e.g. Delhi Institute of Technology"
+                  placeholder="e.g. Sri Krishna College of Engineering and Technology"
                   icon={<Building2 size={18} />}
                   registration={instituteForm.register('institute_name')}
                   disabled={isSubmitting || isFormLocked}
@@ -301,7 +424,7 @@ export const LoginPage: React.FC = () => {
                 <InputField
                   id="inst_id"
                   label="Institute ID"
-                  placeholder="e.g. DEL0101"
+                  placeholder="e.g. 1-SKCET2026"
                   icon={<CreditCard size={18} />}
                   registration={instituteForm.register('institute_id')}
                   error={instituteForm.formState.errors.institute_id?.message}
@@ -316,6 +439,7 @@ export const LoginPage: React.FC = () => {
                   icon={<Lock size={18} />}
                   registration={instituteForm.register('password')}
                   error={instituteForm.formState.errors.password?.message}
+                  isInvalid={failedField === 'password'}
                   disabled={isSubmitting || isFormLocked}
                 />
 
@@ -325,8 +449,21 @@ export const LoginPage: React.FC = () => {
                   isRefreshing={isCaptchaLoading}
                   registration={instituteForm.register('captcha_text')}
                   error={instituteForm.formState.errors.captcha_text?.message}
+                  isInvalid={failedField === 'captcha'}
                   disabled={isSubmitting || isFormLocked}
                 />
+
+                {/* Inline Error Message above Login button */}
+                {generalError && !isFormLocked && (
+                  <div
+                    role="alert"
+                    aria-live="assertive"
+                    className="mb-4 p-3 rounded-lg bg-red-50 border border-red-300 text-red-700 text-sm font-medium flex items-center gap-2.5 animate-fade-in"
+                  >
+                    <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
+                    <span>{generalError}</span>
+                  </div>
+                )}
 
                 {/* Full-width Solid Orange Login Button */}
                 <button
@@ -337,7 +474,7 @@ export const LoginPage: React.FC = () => {
                   {isSubmitting ? (
                     <>
                       <Loader2 size={20} className="animate-spin" />
-                      <span>Authenticating...</span>
+                      <span>Signing in…</span>
                     </>
                   ) : (
                     <span>Login</span>
@@ -353,12 +490,14 @@ export const LoginPage: React.FC = () => {
                 role="tabpanel"
                 aria-labelledby="tab-admin"
                 onSubmit={adminForm.handleSubmit(onAdminSubmit)}
+                onInput={clearErrorsOnTyping}
+                onChange={clearErrorsOnTyping}
                 noValidate
               >
                 <InputField
                   id="admin_identifier"
                   label="Official Email / Employee ID"
-                  placeholder="e.g. admin@aicte-india.org"
+                  placeholder="e.g. admin@aicte.gov.in"
                   icon={<Mail size={18} />}
                   registration={adminForm.register('identifier')}
                   error={adminForm.formState.errors.identifier?.message}
@@ -373,6 +512,7 @@ export const LoginPage: React.FC = () => {
                   icon={<Lock size={18} />}
                   registration={adminForm.register('password')}
                   error={adminForm.formState.errors.password?.message}
+                  isInvalid={failedField === 'password'}
                   disabled={isSubmitting || isFormLocked}
                 />
 
@@ -382,8 +522,21 @@ export const LoginPage: React.FC = () => {
                   isRefreshing={isCaptchaLoading}
                   registration={adminForm.register('captcha_text')}
                   error={adminForm.formState.errors.captcha_text?.message}
+                  isInvalid={failedField === 'captcha'}
                   disabled={isSubmitting || isFormLocked}
                 />
+
+                {/* Inline Error Message above Login button */}
+                {generalError && !isFormLocked && (
+                  <div
+                    role="alert"
+                    aria-live="assertive"
+                    className="mb-4 p-3 rounded-lg bg-red-50 border border-red-300 text-red-700 text-sm font-medium flex items-center gap-2.5 animate-fade-in"
+                  >
+                    <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
+                    <span>{generalError}</span>
+                  </div>
+                )}
 
                 {/* Full-width Solid Orange Login Button */}
                 <button
@@ -394,7 +547,7 @@ export const LoginPage: React.FC = () => {
                   {isSubmitting ? (
                     <>
                       <Loader2 size={20} className="animate-spin" />
-                      <span>Authenticating...</span>
+                      <span>Signing in…</span>
                     </>
                   ) : (
                     <span>Login</span>
@@ -420,20 +573,11 @@ export const LoginPage: React.FC = () => {
             >
               New User? Register
             </Link>
-          </div>
 
-          {/* Under the card note: "Secured by SmartVerify AI" */}
-          <div className="mt-4 flex items-center gap-1.5 text-xs text-slate-800 md:text-white/95 font-medium drop-shadow-sm select-none">
-            <ShieldCheck size={14} className="text-[#F58220]" />
-            <span>Secured by SmartVerify AI</span>
+
           </div>
         </div>
       </main>
-
-      {/* 5. Footer Line */}
-      <footer className="relative z-10 w-full py-3 px-4 text-center text-xs text-slate-700 md:text-white/90 drop-shadow-sm font-normal">
-        © AICTE, Ministry of Education, Govt. of India
-      </footer>
     </div>
   );
 };

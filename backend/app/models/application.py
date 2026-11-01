@@ -22,4 +22,4 @@ class Application(Base):
     institute = relationship("Institute")
     documents = relationship("Document", back_populates="application")
     anomaly_runs = relationship("AnomalyRun", back_populates="application", cascade="all, delete-orphan", order_by="desc(AnomalyRun.id)")
-
+    infrastructure = relationship("InfrastructureDetail", back_populates="application", uselist=False, cascade="all, delete-orphan")

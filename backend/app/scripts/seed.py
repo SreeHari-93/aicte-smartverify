@@ -103,6 +103,79 @@ def seed_database():
             print("  + Seeded 11 Courses for SKCET")
 
         # ----------------------------------------------------------------------
+        # 3b. Courses for Delhi Institute of Advanced Technology (DEL0101)
+        # ----------------------------------------------------------------------
+        delhi_inst = db.query(Institute).filter(Institute.aicte_institute_id == "DEL0101").first()
+        if delhi_inst and db.query(Course).filter(Course.institute_id == delhi_inst.id).count() == 0:
+            delhi_courses = [
+                ("B.Tech Computer Science and Engineering", "UG", 120),
+                ("B.Tech Artificial Intelligence and Data Science", "UG", 60),
+                ("B.Tech Electronics and Communication Engineering", "UG", 90),
+                ("B.Tech Mechanical Engineering", "UG", 60),
+                ("B.Tech Information Technology", "UG", 60),
+                ("MBA", "PG", 60),
+            ]
+            for c_name, level, intake in delhi_courses:
+                c = Course(institute_id=delhi_inst.id, name=c_name, level=level, intake=intake)
+                db.add(c)
+            db.commit()
+            print("  + Seeded 6 Courses for Delhi Institute of Advanced Technology (DEL0101)")
+
+        # ----------------------------------------------------------------------
+        # 3c. Accreditation & Courses for BITS Pilani (1-BITS0102)
+        # ----------------------------------------------------------------------
+        bits_insts = db.query(Institute).filter(Institute.aicte_institute_id.in_(["1-BITS0102", "INST-BITS"])).all()
+        for b_inst in bits_insts:
+            if not db.query(Accreditation).filter(Accreditation.institute_id == b_inst.id).first():
+                db.add(Accreditation(
+                    institute_id=b_inst.id,
+                    nirf_rank=20,
+                    naac_grade="A++ (CGPA 3.68)",
+                    nba_accredited_courses=8,
+                    college_code="C-30102 / BITS-PIL01",
+                    location_address="Vidya Vihar, Pilani, Rajasthan - 333031",
+                    phone="+91 1596 245073 / 74",
+                ))
+            if db.query(Course).filter(Course.institute_id == b_inst.id).count() == 0:
+                b_courses = [
+                    ("B.E. Computer Science", "UG", 180),
+                    ("B.E. Electronics & Instrumentation", "UG", 120),
+                    ("B.E. Electrical & Electronics", "UG", 120),
+                    ("B.E. Mechanical Engineering", "UG", 120),
+                    ("M.E. Microelectronics", "PG", 60),
+                ]
+                for c_name, level, intake in b_courses:
+                    db.add(Course(institute_id=b_inst.id, name=c_name, level=level, intake=intake))
+        db.commit()
+
+        # ----------------------------------------------------------------------
+        # 3d. Accreditation & Courses for NIT Trichy (1-NITT0103)
+        # ----------------------------------------------------------------------
+        nitt_insts = db.query(Institute).filter(Institute.aicte_institute_id.in_(["1-NITT0103", "INST-NITT"])).all()
+        for n_inst in nitt_insts:
+            if not db.query(Accreditation).filter(Accreditation.institute_id == n_inst.id).first():
+                db.add(Accreditation(
+                    institute_id=n_inst.id,
+                    nirf_rank=9,
+                    naac_grade="A++ (CGPA 3.78)",
+                    nba_accredited_courses=10,
+                    college_code="C-40103 / NITT-0103",
+                    location_address="Tanjore Main Road, NH67, Tiruchirappalli, Tamil Nadu - 620015",
+                    phone="+91 431 2503000 / 01",
+                ))
+            if db.query(Course).filter(Course.institute_id == n_inst.id).count() == 0:
+                n_courses = [
+                    ("B.Tech. Computer Science & Engineering", "UG", 120),
+                    ("B.Tech. Electronics & Communication Engineering", "UG", 120),
+                    ("B.Tech. Electrical & Electronics Engineering", "UG", 120),
+                    ("B.Tech. Mechanical Engineering", "UG", 120),
+                    ("M.Tech. VLSI System", "PG", 60),
+                ]
+                for c_name, level, intake in n_courses:
+                    db.add(Course(institute_id=n_inst.id, name=c_name, level=level, intake=intake))
+        db.commit()
+
+        # ----------------------------------------------------------------------
         # 4. Applications (108 applications for SKCET)
         # ----------------------------------------------------------------------
         existing_apps = db.query(Application).filter(Application.institute_id == skcet.id).count()
@@ -437,14 +510,17 @@ def seed_database():
 
         doc_type_map = {}
         for dt_dict in doc_type_definitions:
-            dt = db.query(DocumentType).filter(DocumentType.code == dt_dict["code"]).first()
+            clean_dt = dict(dt_dict)
+            if clean_dt.get("default_validity_months") is None:
+                clean_dt["default_validity_months"] = 0
+            dt = db.query(DocumentType).filter(DocumentType.code == clean_dt["code"]).first()
             if not dt:
-                dt = DocumentType(**dt_dict)
+                dt = DocumentType(**clean_dt)
                 db.add(dt)
                 db.commit()
                 db.refresh(dt)
             else:
-                for k, v in dt_dict.items():
+                for k, v in clean_dt.items():
                     setattr(dt, k, v)
                 db.commit()
                 db.refresh(dt)
@@ -1237,10 +1313,14 @@ def seed_database():
         # ----------------------------------------------------------------------
         del_inst = db.query(Institute).filter(Institute.aicte_institute_id == "DEL0101").first()
         if not del_inst:
-            del_inst = Institute(aicte_institute_id="DEL0101", name="Delhi Institute of Advanced Technology", state="Delhi", status="ACTIVE")
+            del_inst = Institute(aicte_institute_id="DEL0101", name="Sri Krishna College of Engineering and Technology", state="Tamil Nadu", status="ACTIVE")
             db.add(del_inst)
             db.commit()
             db.refresh(del_inst)
+        elif del_inst.name != "Sri Krishna College of Engineering and Technology":
+            del_inst.name = "Sri Krishna College of Engineering and Technology"
+            del_inst.state = "Tamil Nadu"
+            db.commit()
 
         del_user = db.query(User).filter(User.email == "del0101@aicte.edu.in").first()
         if not del_user:

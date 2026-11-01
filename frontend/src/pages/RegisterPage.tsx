@@ -68,17 +68,26 @@ export const RegisterPage: React.FC = () => {
   };
 
   return (
-    <div className="relative min-h-screen bg-slate-50 flex flex-col justify-center items-center px-4 py-12">
+    <div className="h-screen w-full overflow-y-auto bg-slate-50 flex flex-col items-center px-4 py-12 relative">
       <TricolourStrip />
 
       <div className="w-full max-w-md bg-white rounded-2xl shadow-card border border-[#E8EEF5] p-8">
-        <Link
-          to="/login"
-          className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#0B3C9D] hover:underline mb-6"
-        >
-          <ArrowLeft size={16} />
-          <span>Back to Login</span>
-        </Link>
+        <div className="flex items-center justify-between mb-6">
+          <Link
+            to="/login"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#0B3C9D] hover:underline"
+          >
+            <ArrowLeft size={16} />
+            <span>Back to Login</span>
+          </Link>
+          <div className="w-10 h-10 p-1 bg-white rounded-lg border border-slate-200 shadow-xs flex items-center justify-center">
+            <img
+              src="/AICTE Golden Gear Emblem.png"
+              alt="AICTE Golden Gear Emblem"
+              className="w-8 h-8 object-contain select-none"
+            />
+          </div>
+        </div>
 
         <h1 className="text-2xl font-bold text-[#0B3C9D] mb-1">New Institute Registration</h1>
         <p className="text-xs text-[#7A8699] mb-6">
@@ -201,9 +210,7 @@ export const RegisterPage: React.FC = () => {
         </form>
       </div>
 
-      <footer className="mt-8 text-center text-xs text-slate-500">
-        © AICTE, Ministry of Education, Govt. of India
-      </footer>
+
     </div>
   );
 };

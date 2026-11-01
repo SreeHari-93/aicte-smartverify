@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import {
-  AlertTriangle,
   Search,
   Filter,
   CheckCircle2,
@@ -137,30 +136,23 @@ export const AdminAnomalyReviewPage: React.FC = () => {
   return (
     <div className="space-y-6 pb-12 animate-fade-in">
       {/* Header Banner with Principle */}
-      <div className="bg-white rounded-[12px] p-6 shadow-[0_6px_18px_rgba(0,0,0,0.18)] border border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      {/* Header */}
+      <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2.5">
-            <AlertTriangle size={22} className="text-[#E8650A]" />
-            <h1 className="text-xl font-bold text-[#0B3C9D] tracking-tight">
-              Anomaly Review & Evidence Scrutiny
-            </h1>
-          </div>
-          <div className="mt-1 flex items-center gap-2 text-xs">
-            <span className="bg-blue-50 text-[#0B3C9D] font-bold px-2 py-0.5 rounded border border-blue-200">
-              Rules decide, AI explains, Officials approve.
-            </span>
-            <span className="text-slate-500">
-              All items are flagged as <strong className="text-slate-700">"needs verification"</strong> or <strong className="text-slate-700">"potential anomaly"</strong>.
-            </span>
-          </div>
+          <h1 className="text-xl font-bold text-slate-900 tracking-tight">
+            Anomaly review
+          </h1>
+          <p className="text-sm text-slate-600 mt-1">
+            Rules decide, AI explains, Officials approve. Items flagged as needs verification or potential anomaly.
+          </p>
         </div>
         <button
           onClick={fetchData}
           disabled={isLoading}
-          className="inline-flex items-center gap-1.5 px-3 py-2 bg-slate-50 border border-slate-200 hover:bg-slate-100 text-slate-700 rounded-lg text-xs font-semibold transition-colors shrink-0"
+          className="inline-flex items-center gap-1.5 px-3 py-2 bg-white border border-slate-300 hover:border-slate-400 text-slate-700 rounded-lg text-xs font-semibold transition-colors shrink-0 shadow-sm"
         >
-          <RefreshCw size={14} className={isLoading ? 'animate-spin text-[#F58220]' : ''} />
-          <span>Refresh Flags</span>
+          <RefreshCw size={14} className={isLoading ? 'animate-spin text-[#0B3C9D]' : ''} />
+          <span>Refresh</span>
         </button>
       </div>
 
@@ -177,16 +169,16 @@ export const AdminAnomalyReviewPage: React.FC = () => {
       )}
 
       {/* Filter and Search Bar */}
-      <div className="bg-white rounded-[12px] p-4 shadow-[0_4px_12px_rgba(0,0,0,0.06)] border border-slate-200 flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
+      <div className="bg-white rounded-xl p-4 shadow-sm border border-slate-200 flex flex-col md:flex-row gap-3 items-stretch md:items-center justify-between">
         <form onSubmit={handleSearchSubmit} className="flex-1 flex items-center gap-2">
           <div className="relative flex-1">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
             <input
               type="text"
               placeholder="Search by code, detector, reason, or document..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full h-10 pl-9 pr-3 rounded-lg border border-slate-200 text-xs focus:border-[#0B3C9D] outline-none"
+              className="w-full h-10 pl-9 pr-3 rounded-lg border border-slate-300 text-xs focus:border-[#0B3C9D] outline-none placeholder:text-slate-500 text-slate-800"
             />
           </div>
           <button
@@ -198,7 +190,7 @@ export const AdminAnomalyReviewPage: React.FC = () => {
         </form>
 
         <div className="flex flex-wrap items-center gap-2.5">
-          <div className="flex items-center gap-1 text-xs text-slate-500 font-semibold">
+          <div className="flex items-center gap-1 text-xs text-slate-600 font-semibold">
             <Filter size={14} />
             <span>Filters:</span>
           </div>
@@ -206,7 +198,7 @@ export const AdminAnomalyReviewPage: React.FC = () => {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="h-10 px-3 rounded-lg border border-slate-200 text-xs bg-white text-slate-700 focus:border-[#0B3C9D] outline-none"
+            className="h-10 px-3 rounded-lg border border-slate-300 text-xs bg-white text-slate-700 focus:border-[#0B3C9D] outline-none"
           >
             <option value="">Status: All</option>
             <option value="OPEN">Open (Needs Scrutiny)</option>
@@ -219,7 +211,7 @@ export const AdminAnomalyReviewPage: React.FC = () => {
           <select
             value={severityFilter}
             onChange={(e) => setSeverityFilter(e.target.value)}
-            className="h-10 px-3 rounded-lg border border-slate-200 text-xs bg-white text-slate-700 focus:border-[#0B3C9D] outline-none"
+            className="h-10 px-3 rounded-lg border border-slate-300 text-xs bg-white text-slate-700 focus:border-[#0B3C9D] outline-none"
           >
             <option value="">Severity: All</option>
             <option value="HIGH">High Severity</option>
@@ -231,7 +223,7 @@ export const AdminAnomalyReviewPage: React.FC = () => {
           <select
             value={detectorFilter}
             onChange={(e) => setDetectorFilter(e.target.value)}
-            className="h-10 px-3 rounded-lg border border-slate-200 text-xs bg-white text-slate-700 focus:border-[#0B3C9D] outline-none"
+            className="h-10 px-3 rounded-lg border border-slate-300 text-xs bg-white text-slate-700 focus:border-[#0B3C9D] outline-none"
           >
             <option value="">Detector: All</option>
             <option value="DuplicateDetector">Duplicate Detector</option>
@@ -245,34 +237,34 @@ export const AdminAnomalyReviewPage: React.FC = () => {
       </div>
 
       {/* Main Anomaly Flags Table */}
-      <div className="bg-white rounded-[12px] shadow-[0_6px_18px_rgba(0,0,0,0.18)] border border-slate-100 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-xs">
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="table-container">
+          <table className="aicte-table">
             <thead>
-              <tr className="bg-[#E3F0FF] text-[#0B3C9D] uppercase text-[11px] font-bold tracking-wider">
-                <th className="py-3 px-4">Severity & Flag</th>
-                <th className="py-3 px-3">Institute & Document</th>
-                <th className="py-3 px-3">Potential Anomaly Reason</th>
-                <th className="py-3 px-3 text-center">Confidence</th>
-                <th className="py-3 px-3">Overlay</th>
-                <th className="py-3 px-3">Status</th>
-                <th className="py-3 px-4 text-center">Actions</th>
+              <tr className="bg-slate-50 text-slate-600 font-semibold border-b border-slate-200 text-xs">
+                <th className="py-2.5 px-3 w-[15%]">Severity & flag</th>
+                <th className="py-2.5 px-3 w-[22%]">Institute & document</th>
+                <th className="py-2.5 px-3 w-[25%]">Potential anomaly reason</th>
+                <th className="py-2.5 px-3 w-[10%] text-center">Confidence</th>
+                <th className="py-2.5 px-3 w-[8%] text-center">Overlay</th>
+                <th className="py-2.5 px-3 w-[10%]">Status</th>
+                <th className="py-2.5 px-3 w-[100px] text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
               {isLoading ? (
                 <tr>
-                  <td colSpan={7} className="py-12 text-center text-slate-400">
-                    <Loader2 size={24} className="animate-spin mx-auto mb-2 text-[#F58220]" />
+                  <td colSpan={7} className="py-12 text-center text-slate-600">
+                    <Loader2 size={24} className="animate-spin mx-auto mb-2 text-[#0B3C9D]" />
                     <span>Loading preliminary anomaly flags...</span>
                   </td>
                 </tr>
               ) : flags.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-12 text-center text-slate-400">
-                    <CheckCircle2 size={28} className="mx-auto mb-2 text-emerald-500 opacity-60" />
-                    <p className="font-semibold text-slate-600">No anomaly flags matching criteria.</p>
-                    <p className="text-[11px] text-slate-400 mt-0.5">
+                  <td colSpan={7} className="py-12 text-center text-slate-600">
+                    <CheckCircle2 size={28} className="mx-auto mb-2 text-emerald-600" />
+                    <p className="font-semibold text-slate-700">No anomaly flags matching criteria.</p>
+                    <p className="text-[11px] text-slate-600 mt-0.5">
                       All uploaded application documents conform to statutory verification guidelines.
                     </p>
                   </td>
@@ -291,18 +283,18 @@ export const AdminAnomalyReviewPage: React.FC = () => {
                         }`}>
                           {flag.severity}
                         </span>
-                        <span className="font-mono text-slate-400 text-[10px]">#{flag.id}</span>
+                        <span className="font-mono text-slate-600 text-[10px]">#{flag.id}</span>
                       </div>
                       <div className="font-bold text-[#0F2A5C]">{flag.detector}</div>
-                      <span className="text-[10px] text-slate-400 font-mono">{flag.code}</span>
+                      <span className="text-[10px] text-slate-600 font-mono">{flag.code}</span>
                     </td>
 
                     <td className="py-3 px-3">
                       <div className="font-semibold text-[#0F2A5C] truncate max-w-[180px]" title={flag.institute_name}>
                         {flag.institute_name || `Institute #${flag.institute_id}`}
                       </div>
-                      <div className="flex items-center gap-1 text-[11px] text-slate-500 mt-0.5">
-                        <FileText size={12} className="text-slate-400 shrink-0" />
+                      <div className="flex items-center gap-1 text-[11px] text-slate-600 mt-0.5">
+                        <FileText size={12} className="text-slate-500 shrink-0" />
                         <span className="truncate max-w-[170px]" title={flag.document_filename}>
                           {flag.document_filename || `Doc #${flag.document_id}`}
                         </span>
@@ -313,7 +305,7 @@ export const AdminAnomalyReviewPage: React.FC = () => {
                       <p className="text-slate-700 line-clamp-2 leading-relaxed" title={flag.reason}>
                         {flag.reason}
                       </p>
-                      <span className="text-[10px] text-slate-400 mt-0.5 block italic">
+                      <span className="text-[10px] text-slate-600 mt-0.5 block italic">
                         Action: {flag.recommended_action}
                       </span>
                     </td>
@@ -339,14 +331,14 @@ export const AdminAnomalyReviewPage: React.FC = () => {
                           <span>Heatmap</span>
                         </span>
                       ) : (
-                        <span className="text-slate-400 text-[10px]">None</span>
+                        <span className="text-slate-600 text-[10px]">None</span>
                       )}
                     </td>
 
                     <td className="py-3 px-3 whitespace-nowrap">
                       <StatusPill status={flag.review_status} />
                       {flag.reviewed_by_name && (
-                        <div className="text-[10px] text-slate-400 mt-1 truncate max-w-[110px]" title={flag.reviewed_by_name}>
+                        <div className="text-[10px] text-slate-600 mt-1 truncate max-w-[110px]" title={flag.reviewed_by_name}>
                           By: {flag.reviewed_by_name}
                         </div>
                       )}
@@ -449,7 +441,7 @@ export const AdminAnomalyReviewPage: React.FC = () => {
                     alt="Anomaly Overlay Heatmap"
                     className="max-h-72 mx-auto rounded object-contain border border-slate-700"
                   />
-                  <p className="text-[10px] text-slate-400 mt-2">
+                  <p className="text-[10px] text-slate-600 mt-2">
                     Visual bounding boxes and gradient heatmaps highlighting areas needing verification.
                   </p>
                 </div>
@@ -476,7 +468,7 @@ export const AdminAnomalyReviewPage: React.FC = () => {
                   ))}
                 </div>
               ) : (
-                <p className="text-slate-400 italic text-[11px]">No granular evidence coordinates recorded.</p>
+                <p className="text-slate-600 italic text-[11px]">No granular evidence coordinates recorded.</p>
               )}
             </div>
 
@@ -485,7 +477,7 @@ export const AdminAnomalyReviewPage: React.FC = () => {
               <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl">
                 <div className="flex items-center justify-between mb-1">
                   <span className="font-bold text-[#0B3C9D]">Prior Officer Determination:</span>
-                  <span className="text-[10px] text-slate-400">
+                  <span className="text-[10px] text-slate-600">
                     {selectedFlag.reviewed_at ? new Date(selectedFlag.reviewed_at).toLocaleString('en-GB') : ''}
                   </span>
                 </div>
@@ -523,7 +515,7 @@ export const AdminAnomalyReviewPage: React.FC = () => {
                       type="button"
                       disabled={isSubmittingFeedback}
                       onClick={() => handleFeedback(true)}
-                      className="flex-1 py-1.5 px-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 border border-emerald-200 transition-colors disabled:opacity-50"
+                      className="flex-1 py-1.5 px-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 border border-emerald-200 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                     >
                       <ThumbsUp size={13} />
                       <span>Valid Flag</span>
@@ -532,7 +524,7 @@ export const AdminAnomalyReviewPage: React.FC = () => {
                       type="button"
                       disabled={isSubmittingFeedback}
                       onClick={() => handleFeedback(false)}
-                      className="flex-1 py-1.5 px-3 bg-red-50 hover:bg-red-100 text-red-800 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 border border-red-200 transition-colors disabled:opacity-50"
+                      className="flex-1 py-1.5 px-3 bg-red-50 hover:bg-red-100 text-red-800 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 border border-red-200 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
                     >
                       <ThumbsDown size={13} />
                       <span>False Alarm</span>
@@ -594,7 +586,7 @@ export const AdminAnomalyReviewPage: React.FC = () => {
                 type="button"
                 disabled={isSubmitting || !decisionNote.trim()}
                 onClick={(e) => handleDecisionSubmit(e as any)}
-                className="h-11 px-6 bg-[#0B3C9D] hover:bg-[#092E7A] text-white font-bold rounded-xl shadow-sm transition-colors flex items-center gap-2 text-sm disabled:opacity-50"
+                className="h-11 px-6 bg-[#0B3C9D] hover:bg-[#092E7A] text-white font-bold rounded-xl shadow-sm transition-colors flex items-center gap-2 text-sm disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 {isSubmitting && <Loader2 size={16} className="animate-spin" />}
                 <span>Save Determination</span>

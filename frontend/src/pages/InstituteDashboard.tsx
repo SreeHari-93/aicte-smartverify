@@ -47,7 +47,7 @@ export const InstituteDashboard: React.FC = () => {
                 Welcome, {user?.institute?.name || user?.email || 'Institute Officer'}
               </h2>
               <p className="text-sm text-slate-500 mt-1">
-                AICTE ID: <span className="font-semibold text-slate-800">{user?.institute?.aicte_institute_id || 'DEL0101'}</span> | State: {user?.institute?.state || 'National'}
+                AICTE ID: <span className="font-semibold text-slate-800">{user?.institute?.aicte_institute_id || 'SKCET01'}</span> | State: {user?.institute?.state || 'Tamil Nadu'}
               </p>
             </div>
 
@@ -88,7 +88,7 @@ export const InstituteDashboard: React.FC = () => {
       </main>
 
       <footer className="w-full py-4 text-center text-xs text-slate-500 border-t border-slate-200">
-        © AICTE, Ministry of Education, Govt. of India | Secured by SmartVerify AI
+        Secured by SmartVerify AI
       </footer>
     </div>
   );

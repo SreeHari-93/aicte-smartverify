@@ -1,45 +1,93 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Bell, ChevronDown, User, LogOut, KeyRound, Building2, Menu, X, Check } from 'lucide-react';
+import { Bell, ChevronDown, User, LogOut, KeyRound, Building2, Menu, X, Check, ExternalLink } from 'lucide-react';
 import { AicteLogo } from './AicteLogo';
 import { useAuth } from '../context/AuthContext';
-import { NotificationItem, instituteApi } from '../api/institute';
+import { alertsApi, AlertItem } from '../api/alerts';
+import { useNavigate } from 'react-router-dom';
+import { getAlertTarget, canUserAccessAlert } from '../utils/alertRouting';
 
 interface TopBarProps {
   onToggleSidebar?: () => void;
   isSidebarOpen?: boolean;
 }
 
+function formatRole(role?: string): string {
+  if (!role) return 'Admin';
+  switch (role) {
+    case 'ADMIN': return 'Admin';
+    case 'REGIONAL_OFFICER': return 'Regional officer';
+    case 'BUREAU_OFFICER': return 'Bureau officer';
+    case 'COMMITTEE_MEMBER': return 'Committee member';
+    case 'REVIEWER': return 'Reviewer';
+    case 'INSTITUTE': return 'Institute';
+    default: return role.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+  }
+}
+
+function formatDate(dateStr?: string | null): string {
+  if (!dateStr) return 'Just now';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return 'Just now';
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year = d.getFullYear();
+  return `${day}-${month}-${year}`;
+}
+
 export const TopBar: React.FC<TopBarProps> = ({ onToggleSidebar, isSidebarOpen }) => {
   const { user, logout } = useAuth();
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
-  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [alerts, setAlerts] = useState<AlertItem[]>([]);
   const [unreadCount, setUnreadCount] = useState<number>(0);
+  const [accessDeniedId, setAccessDeniedId] = useState<number | null>(null);
+  const navigate = useNavigate();
+
+  const handleOpenCase = async (alertItem: AlertItem) => {
+    if (!canUserAccessAlert(alertItem, user)) {
+      setAccessDeniedId(alertItem.id);
+      return;
+    }
+    setAccessDeniedId(null);
+    if (!alertItem.is_read) {
+      try {
+        await alertsApi.markAlertRead(alertItem.id);
+        setAlerts((prev) => prev.map((a) => (a.id === alertItem.id ? { ...a, is_read: true } : a)));
+        setUnreadCount((prev) => Math.max(0, prev - 1));
+      } catch {
+        // quiet fallback
+      }
+    }
+    setIsNotifOpen(false);
+    const target = getAlertTarget(alertItem, user?.role);
+    navigate(target);
+  };
 
   const userMenuRef = useRef<HTMLDivElement>(null);
   const notifMenuRef = useRef<HTMLDivElement>(null);
 
-  // Fetch notifications
+  const fetchAlerts = async () => {
+    try {
+      const [alertsRes, countRes] = await Promise.all([
+        alertsApi.getAlerts({ limit: 6 }),
+        alertsApi.getUnreadCount(),
+      ]);
+      setAlerts(alertsRes.items || []);
+      setUnreadCount(countRes.unread_count || 0);
+    } catch {
+      // quiet fallback
+    }
+  };
+
   useEffect(() => {
     let mounted = true;
-    const fetchNotifs = async () => {
-      try {
-        const data = await instituteApi.getNotifications();
-        if (mounted) {
-          setNotifications(data.items || []);
-          setUnreadCount(data.unread_count || 0);
-        }
-      } catch {
-        // quiet fallback
-      }
-    };
-    fetchNotifs();
-    const interval = setInterval(fetchNotifs, 60000); // 1 min poll
+    if (mounted) fetchAlerts();
+    const interval = setInterval(fetchAlerts, 30000); // 30 sec poll
     return () => {
       mounted = false;
       clearInterval(interval);
     };
-  }, []);
+  }, [user]);
 
   // Close menus on outside click
   useEffect(() => {
@@ -57,24 +105,23 @@ export const TopBar: React.FC<TopBarProps> = ({ onToggleSidebar, isSidebarOpen }
 
   const handleMarkAllRead = async () => {
     try {
-      await instituteApi.markAllNotificationsRead();
-      setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
+      await alertsApi.markAllAlertsRead();
+      setAlerts((prev) => prev.map((a) => ({ ...a, is_read: true })));
       setUnreadCount(0);
     } catch (err) {
       console.error(err);
     }
   };
 
-  const isAdmin = user?.role === 'ADMIN' || user?.role === 'REVIEWER';
+  const isAdmin = user?.role !== 'INSTITUTE';
   const instituteDisplayName = isAdmin
-    ? (user?.email || 'CENTRAL ADMINISTRATOR')
-    : (user?.institute?.name || user?.email?.split('@')[0] || 'SRI KRISHNA COLLEGE OF ENGINEERING AND TECHNOLOGY');
+    ? (user?.email || 'AICTE Officer Desk')
+    : (user?.institute?.name || user?.email?.split('@')[0] || 'Sri Krishna College of Engineering and Technology');
 
   return (
     <header className="h-24 bg-[#E8650A] text-white flex items-center justify-between px-4 sm:px-6 z-40 sticky top-0 shadow-md select-none">
-      {/* Left Area: Logo & Two-line Title */}
+      {/* Left: Logo and name */}
       <div className="flex items-center gap-2 sm:gap-4 min-w-0">
-        {/* Mobile Hamburger toggle */}
         <button
           onClick={onToggleSidebar}
           aria-label={isSidebarOpen ? 'Close navigation sidebar' : 'Open navigation sidebar'}
@@ -83,10 +130,8 @@ export const TopBar: React.FC<TopBarProps> = ({ onToggleSidebar, isSidebarOpen }
           {isSidebarOpen ? <X size={24} /> : <Menu size={24} />}
         </button>
 
-        {/* Official AICTE Logo */}
         <AicteLogo size="topbar" />
 
-        {/* Two-line title in White */}
         <div className="flex flex-col justify-center min-w-0 leading-tight">
           <h1 className="text-[13px] sm:text-base md:text-lg font-bold uppercase tracking-wider text-white truncate font-sans">
             ALL INDIA COUNCIL FOR TECHNICAL EDUCATION
@@ -97,13 +142,13 @@ export const TopBar: React.FC<TopBarProps> = ({ onToggleSidebar, isSidebarOpen }
         </div>
       </div>
 
-      {/* Right Area: Bell, Divider, Avatar, Name, Chevron dropdown */}
+      {/* Right: Bell and user menu */}
       <div className="flex items-center gap-3 sm:gap-4 shrink-0">
         {/* Notifications Bell */}
         <div className="relative" ref={notifMenuRef}>
           <button
             onClick={() => setIsNotifOpen(!isNotifOpen)}
-            aria-label="Notifications"
+            aria-label="Alerts"
             className="relative p-2.5 rounded-full hover:bg-white/10 transition-colors focus:outline-none focus:ring-2 focus:ring-white/50"
           >
             <Bell size={22} className="text-white" />
@@ -116,15 +161,15 @@ export const TopBar: React.FC<TopBarProps> = ({ onToggleSidebar, isSidebarOpen }
 
           {/* Notifications Dropdown */}
           {isNotifOpen && (
-            <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-xl shadow-2xl border border-slate-100 text-slate-800 overflow-hidden z-50 animate-fade-in">
-              <div className="p-3.5 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
-                <span className="text-xs font-bold uppercase tracking-wider text-[#0B3C9D]">
-                  Notifications ({unreadCount} unread)
+            <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-lg shadow-lg border border-slate-200 text-slate-800 overflow-hidden z-50">
+              <div className="p-3.5 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+                <span className="text-xs font-semibold text-slate-700">
+                  Alerts ({unreadCount} unread)
                 </span>
                 {unreadCount > 0 && (
                   <button
                     onClick={handleMarkAllRead}
-                    className="text-[11px] font-semibold text-[#F58220] hover:underline flex items-center gap-1"
+                    className="text-[11px] font-medium text-[#F58220] hover:underline flex items-center gap-1"
                   >
                     <Check size={12} />
                     <span>Mark all read</span>
@@ -132,28 +177,66 @@ export const TopBar: React.FC<TopBarProps> = ({ onToggleSidebar, isSidebarOpen }
                 )}
               </div>
               <div className="max-h-80 overflow-y-auto divide-y divide-slate-100 text-xs">
-                {notifications.length === 0 ? (
-                  <div className="p-6 text-center text-slate-400">No notifications at this time.</div>
+                {alerts.length === 0 ? (
+                  <div className="p-6 text-center text-slate-600">No active alerts at this time.</div>
                 ) : (
-                  notifications.map((n) => (
+                  alerts.map((a) => (
                     <div
-                      key={n.id}
+                      key={a.id}
                       className={`p-3.5 hover:bg-slate-50 transition-colors ${
-                        !n.is_read ? 'bg-orange-50/50 font-medium' : 'text-slate-600'
+                        !a.is_read ? 'bg-orange-50/50 font-medium' : 'text-slate-600'
                       }`}
                     >
-                      <p className="text-xs font-bold text-[#0F2A5C]">{n.title}</p>
-                      <p className="mt-1 text-[11px] leading-relaxed text-slate-600">{n.message}</p>
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-xs font-semibold text-slate-900">{a.title}</p>
+                        <span className="text-[10px] text-slate-600 shrink-0 font-mono">
+                          {a.case_id}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-[11px] leading-relaxed text-slate-600 line-clamp-2">
+                        {a.message}
+                      </p>
+                      <div className="mt-2 flex items-center justify-between pt-1 border-t border-slate-100">
+                        <span className="text-[10px] text-slate-600">
+                          {formatDate(a.created_at)}
+                        </span>
+                        {(a.case_id || a.link) && (
+                          <div className="flex flex-col items-end">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenCase(a)}
+                              className="text-[11px] font-medium text-[#0B3C9D] hover:underline flex items-center gap-1 cursor-pointer"
+                            >
+                              <span>Open case</span>
+                              <ExternalLink size={10} />
+                            </button>
+                            {accessDeniedId === a.id && (
+                              <span className="text-[10px] text-red-600 font-medium mt-0.5">
+                                You don't have access to this case.
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   ))
                 )}
               </div>
+              <div className="p-2.5 bg-slate-50 border-t border-slate-200 text-center">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsNotifOpen(false);
+                    navigate(isAdmin ? '/admin/alerts' : '/institute/notifications');
+                  }}
+                  className="text-xs font-semibold text-[#0B3C9D] hover:underline cursor-pointer"
+                >
+                  View all alerts
+                </button>
+              </div>
             </div>
           )}
         </div>
-
-        {/* Thin White Vertical Divider */}
-        <div className="h-8 w-px bg-white/40 hidden sm:block" />
 
         {/* User Info & Dropdown Trigger */}
         <div className="relative" ref={userMenuRef}>
@@ -163,52 +246,50 @@ export const TopBar: React.FC<TopBarProps> = ({ onToggleSidebar, isSidebarOpen }
             aria-expanded={isUserMenuOpen}
             aria-haspopup="true"
           >
-            {/* White Circular User Avatar */}
             <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center text-[#E8650A] shadow-inner shrink-0">
               <User size={20} />
             </div>
 
-            {/* Logged in Institute Name in White (two lines, wraps) */}
             <div className="hidden md:flex flex-col max-w-[190px] leading-tight">
-              <span className="text-xs font-bold text-white line-clamp-2 uppercase">
+              <span className="text-xs font-semibold text-white line-clamp-2">
                 {instituteDisplayName}
               </span>
-              <span className="text-[10px] text-white/80 uppercase tracking-wider mt-0.5">
-                {isAdmin ? `SECURITY ROLE: ${user?.role || 'ADMIN'}` : `AICTE ID: ${user?.institute?.aicte_institute_id || 'SKCET01'}`}
+              <span className="text-[11px] text-white/80 mt-0.5">
+                {isAdmin ? `${formatRole(user?.role)}${user?.region ? ` (${user.region})` : ''}` : `AICTE ID: ${user?.institute?.aicte_institute_id || '1-SKCET2026'}`}
               </span>
             </div>
 
             <ChevronDown size={16} className="text-white/80 shrink-0 ml-0.5" />
           </button>
 
-          {/* User Menu Dropdown: Profile, Change Password, Logout */}
+          {/* User Menu Dropdown */}
           {isUserMenuOpen && (
-            <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-2xl border border-slate-100 text-slate-800 py-1.5 z-50 animate-fade-in">
+            <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-slate-200 text-slate-800 py-1.5 z-50">
               <div className="px-4 py-2.5 border-b border-slate-100">
-                <p className="text-xs font-bold text-[#0F2A5C] truncate">{instituteDisplayName}</p>
+                <p className="text-xs font-semibold text-slate-900 truncate">{instituteDisplayName}</p>
                 <p className="text-[11px] text-slate-500 truncate">{user?.email}</p>
               </div>
 
               <button
                 onClick={() => {
                   setIsUserMenuOpen(false);
-                  window.location.href = '/institute/dashboard';
+                  navigate(isAdmin ? '/admin/dashboard' : '/institute/dashboard');
                 }}
-                className="w-full px-4 py-2 text-xs font-medium text-[#0F2A5C] hover:bg-[#FDF0DC] flex items-center gap-2.5 transition-colors"
+                className="w-full px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 transition-colors"
               >
-                <Building2 size={16} className="text-[#0B3C9D]" />
-                <span>Institute Profile</span>
+                <Building2 size={16} className="text-slate-500" />
+                <span>Dashboard</span>
               </button>
 
               <button
                 onClick={() => {
                   setIsUserMenuOpen(false);
-                  alert('Change Password is available in your security settings.');
+                  alert('Security credentials are managed through AICTE central authentication.');
                 }}
-                className="w-full px-4 py-2 text-xs font-medium text-[#0F2A5C] hover:bg-[#FDF0DC] flex items-center gap-2.5 transition-colors"
+                className="w-full px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-2.5 transition-colors"
               >
-                <KeyRound size={16} className="text-[#0B3C9D]" />
-                <span>Change Password</span>
+                <KeyRound size={16} className="text-slate-500" />
+                <span>Security settings</span>
               </button>
 
               <div className="border-t border-slate-100 my-1" />
@@ -227,4 +308,3 @@ export const TopBar: React.FC<TopBarProps> = ({ onToggleSidebar, isSidebarOpen }
     </header>
   );
 };
-

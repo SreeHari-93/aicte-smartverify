@@ -9,6 +9,7 @@ interface CaptchaFieldProps {
   isRefreshing: boolean;
   registration?: UseFormRegisterReturn;
   error?: string;
+  isInvalid?: boolean;
   disabled?: boolean;
 }
 

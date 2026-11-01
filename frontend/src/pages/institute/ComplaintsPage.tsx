@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import {
-  MessageSquare,
-  PlusCircle,
   Eye,
   CheckCircle,
   Send,
@@ -13,6 +11,7 @@ import {
   ApplicationItem,
 } from '../../api/institute';
 import { StatusPill } from '../../components/StatusPill';
+import { DataTable, ColumnDef } from '../../components/DataTable';
 import { Drawer } from '../../components/Drawer';
 
 export const ComplaintsPage: React.FC = () => {
@@ -85,27 +84,23 @@ export const ComplaintsPage: React.FC = () => {
   return (
     <div className="space-y-6 animate-fade-in pb-12">
       {/* Page Title Card */}
-      <div className="bg-white rounded-[12px] p-6 shadow-[0_6px_18px_rgba(0,0,0,0.18)] border border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="bg-white rounded-xl p-6 border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2.5">
-            <MessageSquare size={22} className="text-[#0B3C9D]" />
-            <h2 className="text-xl font-bold text-[#0B3C9D] tracking-tight">
-              Grievance & Scrutiny Ticket Desk
-            </h2>
-          </div>
-          <p className="text-xs text-slate-500 mt-1">
-            Lodge grievances, seek clarification regarding deficiency reports, or request scrutiny fee reconciliation.
+          <h1 className="text-xl font-bold text-slate-900 tracking-tight">
+            Complaints
+          </h1>
+          <p className="text-sm text-slate-600 mt-1">
+            Submit grievances and track responses.
           </p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Left Form: "Raise Complaint" Form */}
-        <div className="lg:col-span-5 bg-white rounded-[12px] p-6 shadow-[0_6px_18px_rgba(0,0,0,0.18)] border border-slate-100">
-          <div className="flex items-center gap-2 pb-4 border-b border-slate-100">
-            <PlusCircle size={20} className="text-[#F58220]" />
-            <h3 className="text-base font-bold text-[#0F2A5C] tracking-tight">
-              Raise a New Grievance Ticket
+        <div className="lg:col-span-5 bg-white rounded-xl p-6 border border-slate-200 shadow-sm">
+          <div className="pb-4 border-b border-slate-100">
+            <h3 className="text-sm font-semibold text-slate-900">
+              Raise complaint
             </h3>
           </div>
 
@@ -178,17 +173,17 @@ export const ComplaintsPage: React.FC = () => {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full h-11 bg-[#F58220] hover:bg-[#E06F0F] text-white font-semibold rounded-[6px] transition-colors flex items-center justify-center gap-2 shadow-sm disabled:opacity-50 select-none"
+              className="w-full h-10 bg-[#F58220] hover:bg-[#E06F0F] text-white font-semibold rounded-lg transition-colors flex items-center justify-center gap-2 shadow-sm disabled:bg-slate-300 disabled:text-slate-600 disabled:cursor-not-allowed select-none text-xs"
             >
               {isSubmitting ? (
                 <>
                   <Loader2 size={16} className="animate-spin" />
-                  <span>Submitting Ticket...</span>
+                  <span>Submitting complaint...</span>
                 </>
               ) : (
                 <>
-                  <Send size={15} />
-                  <span>Submit Grievance</span>
+                  <Send size={14} />
+                  <span>Submit complaint</span>
                 </>
               )}
             </button>
@@ -196,65 +191,82 @@ export const ComplaintsPage: React.FC = () => {
         </div>
 
         {/* Right Table: Table of Past Complaints */}
-        <div className="lg:col-span-7 bg-white rounded-[12px] p-6 shadow-[0_6px_18px_rgba(0,0,0,0.18)] border border-slate-100">
-          <h3 className="text-base font-bold text-[#0B3C9D] pb-4 border-b border-slate-100 tracking-tight">
-            Lodged Grievances & Status ({complaints.length})
+        <div className="lg:col-span-7 bg-white rounded-xl p-6 border border-slate-200 shadow-sm">
+          <h3 className="text-sm font-semibold text-slate-900 pb-4 border-b border-slate-100">
+            Complaints archive ({complaints.length})
           </h3>
 
-          <div className="overflow-x-auto mt-4">
-            <table className="w-full text-left border-collapse text-xs">
-              <thead>
-                <tr className="bg-[#E3F0FF] text-[#0B3C9D] uppercase text-[11px] font-bold tracking-wider">
-                  <th className="py-3 px-3.5 rounded-l-md">Ticket ID</th>
-                  <th className="py-3 px-3.5">Subject</th>
-                  <th className="py-3 px-3.5">Raised On</th>
-                  <th className="py-3 px-3.5">Status</th>
-                  <th className="py-3 px-3.5 text-center rounded-r-md">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
-                {isLoading ? (
-                  <tr>
-                    <td colSpan={5} className="py-12 text-center text-slate-400">
-                      <Loader2 size={24} className="animate-spin mx-auto mb-2 text-[#F58220]" />
-                      Loading grievance history...
-                    </td>
-                  </tr>
-                ) : complaints.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="py-10 text-center text-slate-400">
-                      No complaints lodged yet.
-                    </td>
-                  </tr>
-                ) : (
-                  complaints.map((item) => (
-                    <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="py-3.5 px-3.5 font-mono font-bold text-[#0F2A5C] whitespace-nowrap">
-                        {item.ticket_id}
-                      </td>
-                      <td className="py-3.5 px-3.5 font-semibold text-[#0F2A5C] max-w-[190px] truncate">
-                        {item.subject}
-                      </td>
-                      <td className="py-3.5 px-3.5 text-slate-500 whitespace-nowrap">
-                        {new Date(item.created_at).toLocaleDateString('en-GB')}
-                      </td>
-                      <td className="py-3.5 px-3.5 whitespace-nowrap">
-                        <StatusPill status={item.status} />
-                      </td>
-                      <td className="py-3.5 px-3.5 text-center">
-                        <button
-                          onClick={() => handleOpenTicket(item)}
-                          className="px-2.5 py-1.5 bg-[#0B3C9D] hover:bg-[#092E7A] text-white rounded-[6px] text-xs font-semibold inline-flex items-center gap-1 transition-colors"
-                        >
-                          <Eye size={12} />
-                          <span>Timeline</span>
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+          <div className="mt-4">
+            {(() => {
+              const columns: ColumnDef<ComplaintItem>[] = [
+                {
+                  key: 'ticket_id',
+                  header: 'Ticket ID',
+                  width: '20%',
+                  align: 'left',
+                  render: (item) => (
+                    <span className="font-mono font-medium text-[#0B3C9D] text-xs">
+                      {item.ticket_id}
+                    </span>
+                  ),
+                },
+                {
+                  key: 'subject',
+                  header: 'Subject',
+                  width: '38%',
+                  align: 'left',
+                  render: (item) => (
+                    <span className="text-slate-800 text-xs font-medium line-clamp-2 block" title={item.subject}>
+                      {item.subject}
+                    </span>
+                  ),
+                },
+                {
+                  key: 'date',
+                  header: 'Date',
+                  width: '16%',
+                  align: 'left',
+                  render: (item) => (
+                    <span className="text-slate-600 text-xs">
+                      {new Date(item.created_at).toLocaleDateString('en-GB')}
+                    </span>
+                  ),
+                },
+                {
+                  key: 'status',
+                  header: 'Status',
+                  width: '14%',
+                  align: 'left',
+                  render: (item) => <StatusPill status={item.status} />,
+                },
+                {
+                  key: 'action',
+                  header: 'Action',
+                  width: '12%',
+                  align: 'right',
+                  render: (item) => (
+                    <button
+                      onClick={() => handleOpenTicket(item)}
+                      className="px-2.5 py-1 bg-[#0B3C9D] hover:bg-[#092E7A] text-white rounded text-xs font-medium inline-flex items-center gap-1 transition-colors"
+                    >
+                      <Eye size={11} />
+                      <span>View</span>
+                    </button>
+                  ),
+                },
+              ];
+
+              return (
+                <DataTable
+                  columns={columns}
+                  data={complaints}
+                  keyExtractor={(item) => item.id}
+                  isLoading={isLoading}
+                  emptyMessage="No complaints raised yet."
+                  isLong={complaints.length > 12}
+                />
+              );
+            })()}
           </div>
         </div>
       </div>
@@ -302,7 +314,7 @@ export const ComplaintsPage: React.FC = () => {
                     <div className="absolute -left-[21px] top-1 w-2.5 h-2.5 rounded-full bg-[#0B3C9D]" />
                     <div className="flex items-center justify-between">
                       <span className="font-bold text-[#0F2A5C] text-xs">{ev.action}</span>
-                      <span className="text-[10px] text-slate-400">
+                      <span className="text-[10px] text-slate-600">
                         {new Date(ev.created_at).toLocaleString('en-GB')}
                       </span>
                     </div>

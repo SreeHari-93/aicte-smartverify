@@ -44,6 +44,10 @@ class SafePathResolver:
             val = SafePathResolver._lookup_dict(context.application, tokens[1:])
             if val is not None:
                 return val, None
+            if hasattr(context, "infrastructure") and context.infrastructure:
+                val = SafePathResolver._lookup_dict(context.infrastructure, tokens[1:])
+                if val is not None:
+                    return val, None
             return None, f"Field '{sub_key}' not found in application data."
 
         # 2. Institute scope
@@ -70,7 +74,17 @@ class SafePathResolver:
                 return val, None
             return None, f"Field '{tokens[1]}' not found in courses data."
 
-        # 3. Document scope: doc.<DOC_TYPE>.<field>
+        # 4. Infrastructure scope
+        if root == "infrastructure":
+            if len(tokens) == 1:
+                return context.infrastructure, None
+            sub_key = ".".join(tokens[1:])
+            val = SafePathResolver._lookup_dict(context.infrastructure, tokens[1:])
+            if val is not None:
+                return val, None
+            return None, f"Field '{sub_key}' not found in infrastructure details."
+
+        # 5. Document scope: doc.<DOC_TYPE>.<field>
         if root == "doc":
             if len(tokens) < 3:
                 return None, f"Invalid document path syntax '{path}'. Expected 'doc.<DOC_TYPE>.<field>'."

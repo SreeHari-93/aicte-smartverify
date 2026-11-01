@@ -68,7 +68,7 @@ def test_wrong_role_login_rejection(client, db_session, seed_test_data):
         },
     )
     assert res.status_code == 401
-    assert "Invalid credentials" in res.json()["detail"]
+    assert "Incorrect login ID or password" in res.json()["detail"]
 
 
 def test_get_me_authenticated(client, db_session, seed_test_data):
@@ -117,3 +117,80 @@ def test_logout_revokes_session(client, db_session, seed_test_data):
     me_res = client.get("/api/auth/me")
     assert me_res.status_code == 401
 
+
+
+def test_login_wrong_password_returns_401_generic(client, db_session, seed_test_data):
+    cid = _create_mock_captcha(db_session, "VALID1")
+    wrong_pw = "TotallyWrongSecret!999"
+    res = client.post(
+        "/api/auth/login",
+        json={
+            "role": "INSTITUTE",
+            "institute_id": "TEST001",
+            "password": wrong_pw,
+            "captcha_id": cid,
+            "captcha_text": "VALID1",
+        },
+    )
+    assert res.status_code == 401
+    assert res.json() == {"detail": "Incorrect login ID or password"}
+
+    # Verify no password appears in audit log
+    from backend.app.models.audit_log import AuditLog
+    logs = db_session.query(AuditLog).filter(AuditLog.action == "LOGIN_FAILURE").all()
+    for log in logs:
+        assert wrong_pw not in str(log.reason)
+        assert wrong_pw not in str(log.details)
+
+
+def test_login_wrong_captcha_returns_400_checked_before_password(client, db_session, seed_test_data):
+    cid = _create_mock_captcha(db_session, "CORRECT")
+    # Even with wrong password, wrong captcha fails FIRST with 400
+    res = client.post(
+        "/api/auth/login",
+        json={
+            "role": "INSTITUTE",
+            "institute_id": "TEST001",
+            "password": "WrongPassword",
+            "captcha_id": cid,
+            "captcha_text": "WRONG_CAPTCHA",
+        },
+    )
+    assert res.status_code == 400
+    assert res.json() == {"detail": "Captcha doesn't match"}
+
+
+def test_login_rate_limit_returns_429(client, db_session, seed_test_data):
+    from backend.app.security.rate_limiter import ip_limiter
+    with ip_limiter.lock:
+        ip_limiter.requests.clear()
+
+    # Hit 5 times to exhaust IP limit
+    for i in range(5):
+        cid = _create_mock_captcha(db_session, "VALID")
+        res = client.post(
+            "/api/auth/login",
+            json={
+                "role": "INSTITUTE",
+                "institute_id": f"INST_RATE_{i}",
+                "password": "WrongPassword@123",
+                "captcha_id": cid,
+                "captcha_text": "VALID",
+            },
+        )
+        assert res.status_code == 401
+
+    # 6th attempt returns 429
+    cid = _create_mock_captcha(db_session, "VALID")
+    res6 = client.post(
+        "/api/auth/login",
+        json={
+            "role": "INSTITUTE",
+            "institute_id": "INST_RATE_6",
+            "password": "WrongPassword@123",
+            "captcha_id": cid,
+            "captcha_text": "VALID",
+        },
+    )
+    assert res6.status_code == 429
+    assert res6.json() == {"detail": "Too many attempts. Try again in a few minutes."}

@@ -6,8 +6,20 @@ function getCookie(name: string): string | null {
   return match ? decodeURIComponent(match[3]) : null;
 }
 
+const rawBaseUrl = (import.meta.env.VITE_API_BASE_URL || import.meta.env.VITE_API_URL || '').trim();
+
+export const getApiBaseUrl = (): string => {
+  if (!rawBaseUrl) return '';
+  if (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+    if (rawBaseUrl.includes('localhost') || rawBaseUrl.includes('127.0.0.1')) {
+      return '';
+    }
+  }
+  return rawBaseUrl;
+};
+
 export const apiClient = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || '',
+  baseURL: getApiBaseUrl(),
   withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
@@ -69,7 +81,7 @@ apiClient.interceptors.response.use(
       isRefreshing = true;
 
       try {
-        await axios.post('/api/auth/refresh', {}, { withCredentials: true });
+        await axios.post(`${getApiBaseUrl()}/api/auth/refresh`, {}, { withCredentials: true });
         processQueue(null);
         return apiClient(originalRequest);
       } catch (refreshError) {

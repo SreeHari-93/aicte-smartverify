@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from backend.app.database import get_db
-from backend.app.models.user import User
+from backend.app.models.user import User, UserRole
 from backend.app.models.institute import Institute
 from backend.app.models.application import Application
 from backend.app.models.rule import Rule, RuleVersion, RuleSet, RuleChangeRequest
@@ -24,6 +24,8 @@ from backend.app.models.email_outbox import EmailOutbox
 from backend.app.models.verification import VerificationResult, VerificationStatus
 from backend.app.models.anomaly import AnomalyFlag, AnomalyReviewStatus
 from backend.app.models.report import Report
+from backend.app.models.infrastructure import InfrastructureDetail
+from backend.app.schemas.infrastructure import InfrastructureDetailOut
 from backend.app.models.evaluation import EvaluationRun, AIFeedback
 from backend.app.services.report_service import ReportService
 from backend.app.services.evaluation import EvaluationRunner, EvaluationExporter
@@ -63,7 +65,8 @@ from backend.app.schemas.institute import (
     AssessmentStatsResponse,
 )
 from backend.app.config import settings
-from backend.app.api.deps import require_role
+from backend.app.api.deps import require_role, get_current_user
+from backend.app.services.consolidated_report_service import normalize_region
 from backend.app.schemas.admin import (
     DocumentTypeCreate,
     DocumentTypeUpdate,
@@ -1315,6 +1318,44 @@ def get_admin_duplicate_documents(
 ):
     return ReadinessService.get_all_duplicates(db=db)
 
+
+
+@router.get("/applications/{application_id}/infrastructure", response_model=InfrastructureDetailOut)
+def get_admin_application_infrastructure(
+    application_id: str,
+    current_user: User = Depends(require_admin_or_reviewer),
+    db: Session = Depends(get_db),
+):
+    app_record = None
+    app_str = str(application_id).strip()
+    if app_str.isdigit():
+        app_record = db.query(Application).filter(Application.id == int(app_str)).first()
+    if not app_record:
+        app_record = db.query(Application).filter(Application.application_id == app_str).first()
+    if not app_record:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Application not found.",
+        )
+
+    infra = (
+        db.query(InfrastructureDetail)
+        .filter(InfrastructureDetail.application_id == app_record.id)
+        .first()
+    )
+    if not infra and app_record.institute_id:
+        infra = (
+            db.query(InfrastructureDetail)
+            .filter(InfrastructureDetail.institute_id == app_record.institute_id)
+            .order_by(InfrastructureDetail.id.desc())
+            .first()
+        )
+    if not infra:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Infrastructure details not found for this application.",
+        )
+    return infra
 
 @router.get("/applications/{application_id}/validation", response_model=ValidationRunResponse)
 def get_admin_application_validation(
@@ -2823,13 +2864,16 @@ def get_admin_dashboard_metrics(
 def download_admin_application_report_pdf(
     application_id: str,
     lang: str = Query("en", pattern="^(en|hi)$"),
-    current_user: User = Depends(require_admin_or_reviewer),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """
-    Generate and download official PDF validation summary report for any application.
-    Admin/Reviewer role only.
+    Generate and download official PDF validation summary report for an application.
+    Enforces regional jurisdiction check for Regional Officers.
     """
+    if current_user.role == UserRole.INSTITUTE:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Institutes cannot download reports from admin endpoint.")
+
     app_str = str(application_id).strip()
     app_query = db.query(Application)
     if app_str.isdigit():
@@ -2839,6 +2883,13 @@ def download_admin_application_report_pdf(
 
     if not app_record:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Application not found.")
+
+    if current_user.role == UserRole.REGIONAL_OFFICER:
+        user_reg = normalize_region(current_user.region)
+        wf = db.query(ApplicationWorkflow).filter(ApplicationWorkflow.application_id == app_record.id).first()
+        app_reg = normalize_region(wf.region) if wf else None
+        if user_reg and app_reg and user_reg != app_reg:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Regional officers may only download reports for their assigned region.")
 
     report_record = ReportService.generate_report(
         db=db,

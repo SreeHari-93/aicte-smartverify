@@ -300,7 +300,18 @@ class ExplainerNarrator:
                     explanation = f"Statutory document '{clean_name}' needs verification against issuing authority records (Rule {rules_str}). Official confirmation required."
                     effort_val = "Medium"
                 elif rc.cause_code == "INFRASTRUCTURE_GAP":
-                    explanation = f"Reported institutional infrastructure in '{clean_name}' falls below AICTE mandated norms (Rule {rules_str})."
+                    ev_item = rc.evidence[0] if rc.evidence else None
+                    if ev_item and (ev_item.get("actual_value") is not None or ev_item.get("extracted_value") is not None or ev_item.get("extracted") is not None):
+                        actual = ev_item.get("actual_value") if ev_item.get("actual_value") is not None else (ev_item.get("extracted_value") if ev_item.get("extracted_value") is not None else ev_item.get("extracted"))
+                        target = ev_item.get("target") if ev_item.get("target") is not None else ev_item.get("expected")
+                        metric_name = ev_item.get("metric") or ev_item.get("field") or clean_name
+                        if "." in str(metric_name):
+                            metric_name = str(metric_name).split(".")[-1]
+                        unit = f" {ev_item['unit']}" if ev_item.get("unit") else ""
+                        metric_clean = str(metric_name).replace("_", " ").title()
+                        explanation = f"{metric_clean} {actual}{unit} is below the required {target}{unit} (Rule {rules_str})."
+                    else:
+                        explanation = f"Reported institutional infrastructure in '{clean_name}' falls below AICTE mandated norms (Rule {rules_str})."
                     effort_val = "High"
                 elif rc.cause_code == "INCOMPLETE_FIELD":
                     explanation = f"Mandatory information missing in '{clean_name}' (Rule {rules_str}). Complete the required details."

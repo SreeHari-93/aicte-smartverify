@@ -29,10 +29,10 @@ export const Modal: React.FC<ModalProps> = ({
       document.body.style.overflow = 'hidden';
       window.addEventListener('keydown', handleKeyDown);
     } else {
-      document.body.style.overflow = 'auto';
+      document.body.style.overflow = 'hidden';
     }
     return () => {
-      document.body.style.overflow = 'auto';
+      document.body.style.overflow = 'hidden';
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [isOpen, onClose]);
@@ -73,7 +73,7 @@ export const Modal: React.FC<ModalProps> = ({
           <button
             onClick={onClose}
             aria-label="Close dialog"
-            className="shrink-0 p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer relative z-30"
+            className="shrink-0 p-2 text-slate-600 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer relative z-30"
           >
             <X size={20} />
           </button>

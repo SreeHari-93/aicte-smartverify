@@ -59,8 +59,17 @@ class AuditService:
         details: Optional[dict] = None,
         resource_type: Optional[str] = None,
         resource_id: Optional[str] = None,
+        request: Optional[Request] = None,
     ) -> AuditLog:
-        """Alias for log_event with resource metadata support"""
+        """Alias for log_event with resource metadata and request inspection support"""
+        if request is not None:
+            try:
+                extracted_ip, extracted_ua = cls.extract_client_info(request)
+                ip_address = ip_address or extracted_ip
+                user_agent = user_agent or extracted_ua
+            except Exception:
+                pass
+
         full_details = dict(details or {})
         if resource_type:
             full_details["resource_type"] = resource_type

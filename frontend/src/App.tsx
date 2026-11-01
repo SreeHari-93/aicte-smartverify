@@ -6,24 +6,27 @@ import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { InstituteLayout } from './components/InstituteLayout';
 import { DashboardPage } from './pages/institute/DashboardPage';
-import { CertificatesPage } from './pages/institute/CertificatesPage';
 import { ApplicationsPage } from './pages/institute/ApplicationsPage';
-import { RulesPage } from './pages/institute/RulesPage';
 import { UploadPage } from './pages/institute/UploadPage';
-import { ValidationPage } from './pages/institute/ValidationPage';
 import { ComplaintsPage } from './pages/institute/ComplaintsPage';
 import { ReportsPage } from './pages/institute/ReportsPage';
+import { InstituteUndertakingsPage } from './pages/institute/InstituteUndertakingsPage';
+import { InstituteNotificationsPage } from './pages/institute/InstituteNotificationsPage';
+import { InstituteDocumentValidityPage } from './pages/institute/InstituteDocumentValidityPage';
 import { AdminDashboard } from './pages/AdminDashboard';
 import { AdminLayout } from './components/AdminLayout';
+import { AdminWorkflowPage } from './pages/admin/AdminWorkflowPage';
+import { AdminApplicationsPage } from './pages/admin/AdminApplicationsPage';
+import { AdminEvcPage } from './pages/admin/AdminEvcPage';
+import { AdminUndertakingsPage } from './pages/admin/AdminUndertakingsPage';
+import { AdminDocumentValidityPage } from './pages/admin/AdminDocumentValidityPage';
+import { AdminAlertsPage } from './pages/admin/AdminAlertsPage';
 import { AdminRulesPage } from './pages/admin/AdminRulesPage';
-import { AdminDocumentTypesPage } from './pages/admin/AdminDocumentTypesPage';
-import { AdminChecklistsPage } from './pages/admin/AdminChecklistsPage';
 import { AdminAuditLogPage } from './pages/admin/AdminAuditLogPage';
 import { AdminReportsPage } from './pages/admin/AdminReportsPage';
-import { AdminVerificationQueuePage } from './pages/admin/AdminVerificationQueuePage';
-import { AdminAnomalyReviewPage } from './pages/admin/AdminAnomalyReviewPage';
 import { AdminComplaintsInboxPage } from './pages/admin/AdminComplaintsInboxPage';
 import { AdminEvaluationPage } from './pages/admin/AdminEvaluationPage';
+import { AdminCoveragePage } from './pages/admin/AdminCoveragePage';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -33,6 +36,14 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+const ADMIN_ALLOWED_ROLES = [
+  'ADMIN',
+  'REVIEWER',
+  'REGIONAL_OFFICER',
+  'BUREAU_OFFICER',
+  'COMMITTEE_MEMBER',
+];
 
 // Protected Route Guard
 const ProtectedRoute: React.FC<{
@@ -68,6 +79,15 @@ const ProtectedRoute: React.FC<{
   return <>{children}</>;
 };
 
+// Route Guard: Committee members can only view Dashboard, EVC, Applications (assigned only), and Alerts
+const CommitteeRestrictedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user } = useAuth();
+  if (user?.role === 'COMMITTEE_MEMBER') {
+    return <Navigate to="/admin/dashboard" replace />;
+  }
+  return <>{children}</>;
+};
+
 export const App: React.FC = () => {
   return (
     <QueryClientProvider client={queryClient}>
@@ -89,36 +109,128 @@ export const App: React.FC = () => {
             >
               <Route index element={<Navigate to="/institute/dashboard" replace />} />
               <Route path="dashboard" element={<DashboardPage />} />
-              <Route path="certificates" element={<CertificatesPage />} />
               <Route path="applications" element={<ApplicationsPage />} />
-              <Route path="rules" element={<RulesPage />} />
+              <Route path="undertakings" element={<InstituteUndertakingsPage />} />
+              <Route path="validity" element={<InstituteDocumentValidityPage />} />
+              <Route path="certificates" element={<InstituteDocumentValidityPage />} />
               <Route path="upload" element={<UploadPage />} />
-              <Route path="validation" element={<ValidationPage />} />
               <Route path="complaints" element={<ComplaintsPage />} />
+              <Route path="notifications" element={<InstituteNotificationsPage />} />
               <Route path="reports" element={<ReportsPage />} />
+
+              {/* Removed / Unneeded routes safely redirected */}
+              <Route path="infrastructure" element={<Navigate to="/institute/dashboard" replace />} />
+              <Route path="validation" element={<Navigate to="/institute/dashboard" replace />} />
+              <Route path="rules" element={<Navigate to="/institute/dashboard" replace />} />
             </Route>
 
             {/* Admin Portal Protected Routes with Shared Admin Layout */}
             <Route
               path="/admin"
               element={
-                <ProtectedRoute allowedRoles={['ADMIN', 'REVIEWER']}>
+                <ProtectedRoute allowedRoles={ADMIN_ALLOWED_ROLES}>
                   <AdminLayout />
                 </ProtectedRoute>
               }
             >
               <Route index element={<Navigate to="/admin/dashboard" replace />} />
               <Route path="dashboard" element={<AdminDashboard />} />
-              <Route path="rules" element={<AdminRulesPage />} />
-              <Route path="document-types" element={<AdminDocumentTypesPage />} />
-              <Route path="checklists" element={<AdminChecklistsPage />} />
-              <Route path="verification" element={<AdminVerificationQueuePage />} />
-              <Route path="verification-queue" element={<AdminVerificationQueuePage />} />
-              <Route path="anomalies" element={<AdminAnomalyReviewPage />} />
-              <Route path="complaints" element={<AdminComplaintsInboxPage />} />
-              <Route path="evaluation" element={<AdminEvaluationPage />} />
-              <Route path="reports" element={<AdminReportsPage />} />
-              <Route path="audit-log" element={<AdminAuditLogPage />} />
+
+              {/* Committee members can access EVC, Applications, Alerts */}
+              <Route path="applications" element={<AdminApplicationsPage />} />
+              <Route path="evc" element={<AdminEvcPage />} />
+              <Route path="alerts" element={<AdminAlertsPage />} />
+
+              {/* Committee-restricted governance routes */}
+              <Route
+                path="workflow"
+                element={
+                  <CommitteeRestrictedRoute>
+                    <AdminWorkflowPage />
+                  </CommitteeRestrictedRoute>
+                }
+              />
+              <Route
+                path="undertakings"
+                element={
+                  <CommitteeRestrictedRoute>
+                    <AdminUndertakingsPage />
+                  </CommitteeRestrictedRoute>
+                }
+              />
+              <Route
+                path="validity"
+                element={
+                  <CommitteeRestrictedRoute>
+                    <AdminDocumentValidityPage />
+                  </CommitteeRestrictedRoute>
+                }
+              />
+              <Route
+                path="document-validity"
+                element={
+                  <CommitteeRestrictedRoute>
+                    <AdminDocumentValidityPage />
+                  </CommitteeRestrictedRoute>
+                }
+              />
+              <Route
+                path="rules"
+                element={
+                  <CommitteeRestrictedRoute>
+                    <AdminRulesPage />
+                  </CommitteeRestrictedRoute>
+                }
+              />
+              <Route
+                path="complaints"
+                element={
+                  <CommitteeRestrictedRoute>
+                    <AdminComplaintsInboxPage />
+                  </CommitteeRestrictedRoute>
+                }
+              />
+              <Route
+                path="reports"
+                element={
+                  <CommitteeRestrictedRoute>
+                    <AdminReportsPage />
+                  </CommitteeRestrictedRoute>
+                }
+              />
+              <Route
+                path="evaluation"
+                element={
+                  <CommitteeRestrictedRoute>
+                    <AdminEvaluationPage />
+                  </CommitteeRestrictedRoute>
+                }
+              />
+              <Route
+                path="coverage"
+                element={
+                  <CommitteeRestrictedRoute>
+                    <AdminCoveragePage />
+                  </CommitteeRestrictedRoute>
+                }
+              />
+              <Route
+                path="audit-log"
+                element={
+                  <CommitteeRestrictedRoute>
+                    <AdminAuditLogPage />
+                  </CommitteeRestrictedRoute>
+                }
+              />
+
+              {/* Merged / Redirected routes */}
+              <Route path="document-types" element={<Navigate to="/admin/rules?tab=types" replace />} />
+              <Route path="checklists" element={<Navigate to="/admin/rules?tab=checklists" replace />} />
+
+              {/* Removed routes redirected to admin dashboard */}
+              <Route path="verification" element={<Navigate to="/admin/dashboard" replace />} />
+              <Route path="verification-queue" element={<Navigate to="/admin/dashboard" replace />} />
+              <Route path="anomalies" element={<Navigate to="/admin/dashboard" replace />} />
             </Route>
 
             {/* Fallback */}

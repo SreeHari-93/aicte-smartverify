@@ -9,9 +9,12 @@ __pycache__/
 .pytest_cache/
 .venv/
 venv/
+backend/venv/
 
 # Database files
 *.db
+!aicte.db
+test_aicte.db
 *.db-journal
 *.sqlite
 *.sqlite3
@@ -22,6 +25,7 @@ frontend/node_modules/
 
 # Build files
 dist/
+!frontend/dist/
 build/
 coverage/
 .next/
@@ -33,4 +37,7 @@ coverage/
 # Logs
 *.log
 
-backend/storage/
+# Storage, uploads, and demo data
+!storage/
+!uploads/
+!backend/demo_data/
